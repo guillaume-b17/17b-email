@@ -1,0 +1,14 @@
+{% set tone = tone|default('info') %}
+{% set toneClasses = {
+    info: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-100',
+    success: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100',
+    warning: 'border-amber-500/40 bg-amber-500/10 text-amber-100',
+    danger: 'border-rose-500/40 bg-rose-500/10 text-rose-100'
+} %}
+
+<div role="status" class="rounded-lg border px-4 py-3 text-sm {{ toneClasses[tone]|default(toneClasses.info) }}">
+    {% if title is defined and title is not empty %}
+        <p class="font-semibold">{{ title }}</p>
+    {% endif %}
+    <p>{{ message|default('') }}</p>
+</div>

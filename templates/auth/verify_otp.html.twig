@@ -1,0 +1,41 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Vérification OTP{% endblock %}
+
+{% block body %}
+    <main id="contenu-principal" class="mx-auto flex min-h-screen w-full items-start justify-center px-6 py-20">
+        <section class="ui-card w-full max-w-md space-y-6">
+            <header>
+                <h1 class="text-2xl font-semibold">Vérification du code</h1>
+                <p class="mt-2 text-sm text-slate-300">
+                    Entrez le code envoyé à <span class="font-medium text-slate-100">{{ email }}</span>.
+                </p>
+            </header>
+
+            {% for message in app.flashes('error') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'danger',
+                    title: 'Échec de connexion',
+                    message: message
+                } %}
+            {% endfor %}
+
+            {% for message in app.flashes('success') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'success',
+                    title: 'Information',
+                    message: message
+                } %}
+            {% endfor %}
+
+            {{ form_start(form, { attr: { class: 'space-y-4' } }) }}
+                <div class="space-y-1">
+                    {{ form_label(form.code, null, { label_attr: { class: 'text-sm font-medium text-slate-100' } }) }}
+                    {{ form_widget(form.code, { attr: { class: 'w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 tracking-[0.3em]' } }) }}
+                    {{ form_errors(form.code) }}
+                </div>
+                {{ form_widget(form.submit, { attr: { class: 'ui-button-primary w-full' } }) }}
+            {{ form_end(form) }}
+        </section>
+    </main>
+{% endblock %}

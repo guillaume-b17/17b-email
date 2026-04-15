@@ -1,0 +1,12 @@
+framework:
+    rate_limiter:
+        otp_request:
+            policy: token_bucket
+            limit: 5
+            rate:
+                interval: '15 minutes'
+                amount: 5
+        otp_verify:
+            policy: sliding_window
+            limit: 10
+            interval: '15 minutes'

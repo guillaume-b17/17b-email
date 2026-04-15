@@ -1,0 +1,62 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Comptes e-mail (admin){% endblock %}
+
+{% block body %}
+    <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
+        <section class="ui-card space-y-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h1 class="text-2xl font-semibold">Comptes e-mail (admin)</h1>
+                    <p class="text-sm text-slate-300">Sélectionnez un compte pour gérer son répondeur et ses redirections.</p>
+                </div>
+                <a class="ui-button-primary" href="{{ path('app_admin_accounts', { sync: 1 }) }}">Synchroniser tous les comptes OVH</a>
+            </div>
+
+            {% for message in app.flashes('success') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'success',
+                    title: 'Succès',
+                    message: message
+                } %}
+            {% endfor %}
+
+            {% for message in app.flashes('error') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'danger',
+                    title: 'Erreur',
+                    message: message
+                } %}
+            {% endfor %}
+        </section>
+
+        <section class="ui-card">
+            {% if accounts is empty %}
+                <p class="text-sm text-slate-400">Aucun compte synchronisé.</p>
+            {% else %}
+                <div class="overflow-hidden rounded-lg border border-slate-800">
+                    <table class="min-w-full divide-y divide-slate-800 text-sm">
+                        <thead class="bg-slate-900/80 text-slate-300">
+                            <tr>
+                                <th class="px-3 py-2 text-left font-medium">Compte</th>
+                                <th class="px-3 py-2 text-left font-medium">Propriétaire</th>
+                                <th class="px-3 py-2 text-left font-medium">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                            {% for account in accounts %}
+                                <tr>
+                                    <td class="px-3 py-2 text-slate-100">{{ account.email }}</td>
+                                    <td class="px-3 py-2 text-slate-100">{{ account.owner.email }}</td>
+                                    <td class="px-3 py-2">
+                                        <a class="ui-button-primary" href="{{ path('app_user_account', { accountId: account.id }) }}">Gérer ce compte</a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+{% endblock %}

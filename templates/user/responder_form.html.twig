@@ -1,0 +1,192 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Édition du répondeur{% endblock %}
+
+{% block body %}
+    {% set accountParams = isAdminContext is defined and isAdminContext and currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : {} %}
+    <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
+        <section class="ui-card space-y-5">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h1 class="text-2xl font-semibold">Répondeur automatique</h1>
+                    <p class="mt-1 text-sm text-slate-300">Adresse concernée: {{ emailAccount.email }}</p>
+                </div>
+                <a class="ui-button-secondary" href="{{ path('app_user_account', accountParams) }}">Retour au compte</a>
+            </div>
+
+            {% for message in app.flashes('success') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'success',
+                    title: 'Succès',
+                    message: message
+                } %}
+            {% endfor %}
+
+            {% for message in app.flashes('error') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'danger',
+                    title: 'Erreur',
+                    message: message
+                } %}
+            {% endfor %}
+
+            <form method="post" action="{{ path('app_user_responder_save') }}" class="space-y-4">
+                <input type="hidden" name="_token" value="{{ csrf_token('save_responder') }}">
+                {% if accountParams.accountId is defined %}
+                    <input type="hidden" name="accountId" value="{{ accountParams.accountId }}">
+                {% endif %}
+
+                <div class="rounded-lg border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200">
+                    Variables disponibles : <code>{date_debut}</code>, <code>{date_fin}</code>, <code>{telephone_agence}</code><br>
+                    Téléphone agence appliqué automatiquement : <span class="font-semibold">{{ agencyPhone }}</span>
+                </div>
+
+                <div class="space-y-1">
+                    <label for="responder_preset" class="text-sm font-medium text-slate-100">Message préenregistré</label>
+                    <select
+                        id="responder_preset"
+                        name="presetKey"
+                        class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                    >
+                        <option value="">Choisir un format</option>
+                        {% for key, preset in messagePresets %}
+                            <option value="{{ key }}">{{ preset.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="space-y-1">
+                        <label for="responder_starts_at" class="text-sm font-medium text-slate-100">Début</label>
+                        <input
+                            id="responder_starts_at"
+                            name="startsAt"
+                            type="datetime-local"
+                            class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                            value="{{ responder and responder.startsAt ? responder.startsAt|date('Y-m-d\\TH:i') : '' }}"
+                        >
+                    </div>
+                    <div class="space-y-1">
+                        <label for="responder_ends_at" class="text-sm font-medium text-slate-100">Fin</label>
+                        <input
+                            id="responder_ends_at"
+                            name="endsAt"
+                            type="datetime-local"
+                            class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                            min="{{ responder and responder.startsAt ? responder.startsAt|date('Y-m-d\\TH:i') : '' }}"
+                            value="{{ responder and responder.endsAt ? responder.endsAt|date('Y-m-d\\TH:i') : '' }}"
+                        >
+                    </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label for="responder_message" class="text-sm font-medium text-slate-100">Message</label>
+                    <textarea
+                        id="responder_message"
+                        name="message"
+                        rows="8"
+                        required
+                        class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                        placeholder="Bonjour, je suis absent..."
+                    >{{ responder ? responder.message : '' }}</textarea>
+                </div>
+
+                <div class="flex flex-wrap gap-3">
+                    <button type="submit" class="ui-button-primary">Enregistrer le répondeur</button>
+                </div>
+            </form>
+
+            {% if responder %}
+                <form method="post" action="{{ path('app_user_responder_delete') }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('delete_responder') }}">
+                    {% if accountParams.accountId is defined %}
+                        <input type="hidden" name="accountId" value="{{ accountParams.accountId }}">
+                    {% endif %}
+                    <button type="submit" class="ui-button-secondary">Supprimer le répondeur</button>
+                </form>
+            {% endif %}
+        </section>
+    </main>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const startsAt = document.getElementById('responder_starts_at');
+            const endsAt = document.getElementById('responder_ends_at');
+            const presetSelect = document.getElementById('responder_preset');
+            const message = document.getElementById('responder_message');
+            const presets = {{ messagePresets|json_encode|raw }};
+            const agencyPhone = {{ agencyPhone|json_encode|raw }};
+            if (!startsAt || !endsAt) {
+                return;
+            }
+
+            const syncMinEndDate = () => {
+                endsAt.min = startsAt.value || '';
+                if (endsAt.value && startsAt.value && endsAt.value < startsAt.value) {
+                    endsAt.value = startsAt.value;
+                }
+            };
+
+            startsAt.addEventListener('change', syncMinEndDate);
+            syncMinEndDate();
+
+            const formatDate = (rawValue) => {
+                if (!rawValue) {
+                    return 'date non définie';
+                }
+
+                const date = new Date(rawValue);
+                if (Number.isNaN(date.getTime())) {
+                    return 'date non définie';
+                }
+
+                return date.toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                });
+            };
+
+            const applyVariables = (content) => {
+                return content
+                    .replaceAll('{date_debut}', formatDate(startsAt.value))
+                    .replaceAll('{date_fin}', formatDate(endsAt.value))
+                    .replaceAll('{telephone_agence}', agencyPhone);
+            };
+
+            const replaceShortcodesInTextarea = () => {
+                if (!message) {
+                    return;
+                }
+
+                const replaced = applyVariables(message.value);
+                if (replaced !== message.value) {
+                    message.value = replaced;
+                }
+            };
+
+            if (presetSelect && message) {
+                presetSelect.addEventListener('change', () => {
+                    const preset = presets[presetSelect.value];
+                    if (!preset) {
+                        return;
+                    }
+
+                    message.value = applyVariables(preset.content);
+                });
+
+                // Remplace automatiquement les shortcodes saisis/collés dans la zone message.
+                message.addEventListener('input', replaceShortcodesInTextarea);
+                message.addEventListener('change', replaceShortcodesInTextarea);
+                message.addEventListener('blur', replaceShortcodesInTextarea);
+                message.addEventListener('paste', () => {
+                    setTimeout(replaceShortcodesInTextarea, 0);
+                });
+            }
+        });
+    </script>
+{% endblock %}

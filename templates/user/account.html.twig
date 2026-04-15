@@ -1,0 +1,162 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mon compte e-mail{% endblock %}
+
+{% block body %}
+    {% set accountParams = isAdminContext is defined and isAdminContext and currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : {} %}
+    <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
+        <section class="ui-card space-y-4">
+            <div class="flex flex-wrap gap-2">
+                <a class="ui-button-primary" href="{{ path('app_user_account', accountParams|merge({ sync: 1 })) }}">Synchroniser OVH</a>
+                <a class="ui-button-secondary" href="{{ path('app_user_account', accountParams|merge({ syncResponder: 1 })) }}">Récupérer le répondeur</a>
+            </div>
+            {% for message in app.flashes('success') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'success',
+                    title: 'Succès',
+                    message: message
+                } %}
+            {% endfor %}
+
+            {% for message in app.flashes('error') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'danger',
+                    title: 'Erreur',
+                    message: message
+                } %}
+            {% endfor %}
+
+            {% if syncError %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'warning',
+                    title: 'Détail technique',
+                    message: syncError
+                } %}
+            {% endif %}
+        </section>
+
+        {% if emailAccount %}
+            <section class="flex flex-col gap-6">
+                <article class="ui-card">
+                <h2 class="text-xl font-semibold">Informations du compte e-mail</h2>
+                <dl class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <dt class="text-xs uppercase tracking-wide text-slate-400">Adresse</dt>
+                        <dd class="mt-1 text-base font-medium">{{ emailAccount.email }}</dd>
+                    </div>
+                    {#
+                    <div>
+                        <dt class="text-xs uppercase tracking-wide text-slate-400">Domaine</dt>
+                        <dd class="mt-1 text-base font-medium">{{ emailAccount.domain }}</dd>
+                    </div> #}
+                    <div>
+                        <dt class="text-xs uppercase tracking-wide text-slate-400">Quota</dt>
+                        <dd class="mt-1 text-base font-medium">{{ emailAccount.quotaMb ?? 'N/A' }} Mo</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs uppercase tracking-wide text-slate-400">Utilisation</dt>
+                        <dd class="mt-1 text-base font-medium">{{ emailAccount.usageMb ?? 'N/A' }} Mo</dd>
+                    </div>
+                    {#
+                    <div>
+                        <dt class="text-xs uppercase tracking-wide text-slate-400">Boîtes synchronisées</dt>
+                        <dd class="mt-1 text-base font-medium">{{ mailboxCount }}</dd>
+                    </div>
+                    #}
+                    {# <div>
+                        <dt class="text-xs uppercase tracking-wide text-slate-400">Identifiant OVH</dt>
+                        <dd class="mt-1 text-base font-medium">{{ emailAccount.ovhIdentifier ?? 'N/A' }}</dd>
+                    </div> #}
+                    <div>
+                        <dt class="text-xs uppercase tracking-wide text-slate-400">Dernière synchro</dt>
+                        <dd class="mt-1 text-base font-medium">
+                            {{ emailAccount.syncedAt ? emailAccount.syncedAt|date('d/m/Y H:i') : 'Jamais' }}
+                        </dd>
+                    </div>
+                </dl>
+                </article>
+
+                <article class="ui-card space-y-5">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-xl font-semibold">Répondeur</h2>
+                    </div>
+                    <a class="ui-button-primary" href="{{ path('app_user_responder_edit', accountParams) }}">Gérer le répondeur</a>
+                </div>
+
+                {% if responder %}
+                    <dl class="grid gap-4 sm:grid-cols-3">
+                        <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                            <dt class="text-xs uppercase tracking-wide text-slate-400">Statut</dt>
+                            <dd class="mt-1 text-xl font-semibold">
+                                {% if responder.enabled %}
+                                    Actif
+                                {% else %}
+                                    Inactif / expiré
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                            <dt class="text-xs uppercase tracking-wide text-slate-400">Début</dt>
+                            <dd class="mt-1 text-xl font-semibold">{{ responder.startsAt ? responder.startsAt|date('d/m/Y H:i') : 'N/A' }}</dd>
+                        </div>
+                        <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                            <dt class="text-xs uppercase tracking-wide text-slate-400">Fin</dt>
+                            <dd class="mt-1 text-xl font-semibold">{{ responder.endsAt ? responder.endsAt|date('d/m/Y H:i') : 'N/A' }}</dd>
+                        </div>
+                    </dl>
+                {% else %}
+                    <p class="text-sm text-slate-300">Aucun répondeur</p>
+                {% endif %}
+
+                {% if responder and responderSyncReport is not null %}
+                    <div class="rounded-lg border border-slate-700 bg-slate-950/60 p-4 text-xs text-slate-300">
+                        <p class="mb-2 font-semibold text-slate-100">Diagnostic récupération OVH</p>
+                        <p>Résultat: {{ responderSyncReport.found ? 'Répondeur trouvé' : 'Aucun répondeur trouvé' }}</p>
+                        <p>Endpoint utilisé: {{ responderSyncReport.path ?? 'Aucun' }}</p>
+                        {% if responderSyncReport.errors is not empty %}
+                            <p class="mt-2 font-medium text-slate-200">Erreurs rencontrées:</p>
+                            <ul class="mt-1 list-disc space-y-1 pl-5">
+                                {% for error in responderSyncReport.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                </article>
+
+                <article class="ui-card">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-xl font-semibold">Redirections</h2>
+                    </div>
+                    <a class="ui-button-primary" href="{{ path('app_user_redirections', accountParams) }}">Gérer les redirections</a>
+                </div>
+                <dl class="mt-4 grid gap-4 sm:grid-cols-3">
+                    <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                        <dt class="text-xs uppercase tracking-wide text-slate-400">Sortantes</dt>
+                        <dd class="mt-1 text-xl font-semibold">{{ redirectionSummary.outgoing }}</dd>
+                    </div>
+                    <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                        <dt class="text-xs uppercase tracking-wide text-slate-400">Entrantes</dt>
+                        <dd class="mt-1 text-xl font-semibold">{{ redirectionSummary.incoming }}</dd>
+                    </div>
+                    <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                        <dt class="text-xs uppercase tracking-wide text-slate-400">Copies conservées OVH</dt>
+                        <dd class="mt-1 text-xl font-semibold">{{ redirectionSummary.localCopy }}</dd>
+                    </div>
+                </dl>
+                </article>
+
+                
+            </section>
+        {% else %}
+            {% include 'components/ui/alert.html.twig' with {
+                tone: 'info',
+                title: 'Aucune donnée',
+                message: 'Cliquez sur "Synchroniser OVH" pour récupérer vos informations de boîte e-mail.'
+            } %}
+        {% endif %}
+    </main>
+{% endblock %}

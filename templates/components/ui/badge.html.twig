@@ -1,0 +1,11 @@
+{% set tone = tone|default('neutral') %}
+{% set toneClasses = {
+    neutral: 'border-slate-700 bg-slate-800 text-slate-100',
+    success: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
+    warning: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+    danger: 'border-rose-500/40 bg-rose-500/10 text-rose-200'
+} %}
+
+<span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-medium {{ toneClasses[tone]|default(toneClasses.neutral) }}">
+    {{ label|default('Badge') }}
+</span>

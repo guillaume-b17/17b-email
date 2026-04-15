@@ -1,0 +1,7 @@
+{% set variant = variant|default('primary') %}
+{% set type = type|default('button') %}
+{% set classes = variant == 'secondary' ? 'ui-button-secondary' : 'ui-button-primary' %}
+
+<button type="{{ type }}" class="{{ classes }} {{ class|default('')|trim }}">
+    {{ label|default('Action') }}
+</button>

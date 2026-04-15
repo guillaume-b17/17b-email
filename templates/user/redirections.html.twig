@@ -1,0 +1,146 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mes redirections{% endblock %}
+
+{% block body %}
+    {% set accountParams = isAdminContext is defined and isAdminContext and currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : {} %}
+    <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
+        <section class="ui-card space-y-5">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h1 class="text-2xl font-semibold">Gestion des redirections</h1>
+                    <p class="mt-1 text-sm text-slate-300">Compte: {{ emailAccount.email }}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <a class="ui-button-secondary" href="{{ path('app_user_account', accountParams) }}">Retour au compte</a>
+                    <a class="ui-button-primary" href="{{ path('app_user_redirections', accountParams|merge({ syncRedirections: 1 })) }}">Récupérer les redirections OVH</a>
+                </div>
+            </div>
+
+            {% for message in app.flashes('success') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'success',
+                    title: 'Succès',
+                    message: message
+                } %}
+            {% endfor %}
+
+            {% for message in app.flashes('error') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'danger',
+                    title: 'Erreur',
+                    message: message
+                } %}
+            {% endfor %}
+        </section>
+
+        <section class="ui-card space-y-5">
+            <h2 class="text-lg font-semibold">Redirections sortantes</h2>
+
+            <form method="post" action="{{ path('app_user_redirection_create') }}" class="space-y-2 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                <input type="hidden" name="_token" value="{{ csrf_token('create_redirection') }}">
+                {% if accountParams.accountId is defined %}
+                    <input type="hidden" name="accountId" value="{{ accountParams.accountId }}">
+                {% endif %}
+                <label for="new_redirection_destination" class="text-xs uppercase tracking-wide text-slate-400">Nouvelle destination</label>
+                <div class="flex flex-col gap-2 sm:flex-row">
+                    <input
+                        id="new_redirection_destination"
+                        type="email"
+                        name="destinationEmail"
+                        required
+                        class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                        placeholder="contact@domaine.fr"
+                    >
+                    <button type="submit" class="ui-button-primary">Créer</button>
+                </div>
+                <label class="flex items-center gap-2 text-sm text-slate-300">
+                    <input type="checkbox" name="localCopy" value="1" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-400">
+                    Conserver une copie des mails sur le serveur OVH
+                </label>
+            </form>
+
+            {% if outgoingRedirections is empty %}
+                <p class="text-sm text-slate-400">Aucune redirection sortante trouvée.</p>
+            {% else %}
+                <div class="overflow-hidden rounded-lg border border-slate-800">
+                    <table class="min-w-full divide-y divide-slate-800 text-sm">
+                        <thead class="bg-slate-900/80 text-slate-300">
+                            <tr>
+                                <th class="px-3 py-2 text-left font-medium">Depuis</th>
+                                <th class="px-3 py-2 text-left font-medium">Vers</th>
+                                <th class="px-3 py-2 text-left font-medium">Copie OVH</th>
+                                <th class="px-3 py-2 text-left font-medium">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                            {% for redirection in outgoingRedirections %}
+                                <tr>
+                                    <td class="px-3 py-2 text-slate-100">{{ redirection.sourceEmail }}</td>
+                                    <td class="px-3 py-2 text-slate-100">
+                                        <form method="post" action="{{ path('app_user_redirection_update', { id: redirection.id }) }}" class="flex flex-col gap-2 sm:flex-row">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('update_redirection_' ~ redirection.id) }}">
+                                            {% if accountParams.accountId is defined %}
+                                                <input type="hidden" name="accountId" value="{{ accountParams.accountId }}">
+                                            {% endif %}
+                                            <input
+                                                type="email"
+                                                name="destinationEmail"
+                                                required
+                                                value="{{ redirection.destinationEmail }}"
+                                                class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                                            >
+                                            <button type="submit" class="ui-button-secondary">Modifier</button>
+                                        </form>
+                                    </td>
+                                    <td class="px-3 py-2 text-slate-100">
+                                        {% if redirection.localCopy %}
+                                            Oui
+                                        {% else %}
+                                            Non
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        <form method="post" action="{{ path('app_user_redirection_delete', { id: redirection.id }) }}">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('delete_redirection_' ~ redirection.id) }}">
+                                            {% if accountParams.accountId is defined %}
+                                                <input type="hidden" name="accountId" value="{{ accountParams.accountId }}">
+                                            {% endif %}
+                                            <button type="submit" class="ui-button-secondary">Supprimer</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </section>
+
+        <section class="ui-card space-y-5">
+            <h2 class="text-lg font-semibold">Redirections entrantes (lecture seule)</h2>
+            {% if incomingRedirections is empty %}
+                <p class="text-sm text-slate-400">Aucune redirection entrante trouvée.</p>
+            {% else %}
+                <div class="overflow-hidden rounded-lg border border-slate-800">
+                    <table class="min-w-full divide-y divide-slate-800 text-sm">
+                        <thead class="bg-slate-900/80 text-slate-300">
+                            <tr>
+                                <th class="px-3 py-2 text-left font-medium">Depuis</th>
+                                <th class="px-3 py-2 text-left font-medium">Vers</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                            {% for redirection in incomingRedirections %}
+                                <tr>
+                                    <td class="px-3 py-2 text-slate-100">{{ redirection.sourceEmail }}</td>
+                                    <td class="px-3 py-2 text-slate-100">{{ redirection.destinationEmail }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ app_name }} | Accueil{% endblock %}
+
+{% block body %}
+    <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
+        <header class="ui-card">
+            <p class="mb-2 text-sm uppercase tracking-wide text-indigo-300">Projet Symfony 7</p>
+            <h1 class="text-2xl font-semibold sm:text-3xl">Portail de gestion OVH e-mail</h1>
+            <p class="mt-3 text-sm text-slate-300 sm:text-base">
+                Socle initial prêt: Symfony, Doctrine, sécurité, Twig et Tailwind.
+            </p>
+            <div class="mt-4 flex gap-3">
+                {% if app.user %}
+                    <a class="ui-button-primary" href="{{ path('app_user_account') }}">Accéder à mon espace</a>
+                {% else %}
+                    <a class="ui-button-primary" href="{{ path('app_auth_request') }}">Connexion OTP</a>
+                {% endif %}
+            </div>
+        </header>
+
+        <section class="grid gap-4 md:grid-cols-3">
+            {% include 'components/ui/card.html.twig' with {
+                title: 'Sécurité',
+                content: 'Authentification OTP passwordless et protections anti-abus prévues.',
+                badge: 'En cours'
+            } %}
+            {% include 'components/ui/card.html.twig' with {
+                title: 'Synchronisation',
+                content: 'Architecture modulaire prévue pour la synchro OVH au login et via cron.',
+                badge: 'En cours'
+            } %}
+            {% include 'components/ui/card.html.twig' with {
+                title: 'Backoffice',
+                content: 'Interface admin full Twig sur mesure, sans EasyAdmin.',
+                badge: 'À venir'
+            } %}
+        </section>
+    </main>
+{% endblock %}

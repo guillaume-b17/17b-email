@@ -1,0 +1,33 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Connexion OTP{% endblock %}
+
+{% block body %}
+    <main id="contenu-principal" class="mx-auto flex min-h-screen w-full items-start justify-center px-6 py-20">
+        <section class="ui-card space-y-6" style="width: min(100%, 24rem);">
+            <header>
+                <h1 class="text-2xl font-semibold">Connexion sécurisée</h1>
+                <p class="mt-2 text-sm text-slate-300">
+                    Saisissez votre adresse e-mail professionnelle pour recevoir un code temporaire.
+                </p>
+            </header>
+
+            {% for message in app.flashes('success') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'success',
+                    title: 'Information',
+                    message: message
+                } %}
+            {% endfor %}
+
+            {{ form_start(form, { attr: { class: 'space-y-4' } }) }}
+                <div class="space-y-1">
+                    {{ form_label(form.email, null, { label_attr: { class: 'text-sm font-medium text-slate-100' } }) }}
+                    {{ form_widget(form.email, { attr: { class: 'w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100' } }) }}
+                    {{ form_errors(form.email) }}
+                </div>
+                {{ form_widget(form.submit, { attr: { class: 'ui-button-primary w-full' } }) }}
+            {{ form_end(form) }}
+        </section>
+    </main>
+{% endblock %}

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{% block title %}{{ app_name }}{% endblock %}</title>
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22><text y=%221.2em%22 font-size=%2296%22>⚫️</text><text y=%221.3em%22 x=%220.2em%22 font-size=%2276%22 fill=%22%23fff%22>sf</text></svg>">
+        {% block stylesheets %}
+            <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
+        {% endblock %}
+
+        {% block javascripts %}
+            {% block importmap %}{{ importmap('app') }}{% endblock %}
+        {% endblock %}
+
+        {% set frankenphpHotReload = app.request.server.get('FRANKENPHP_HOT_RELOAD') %}
+        {% if frankenphpHotReload %}
+        <meta name="frankenphp-hot-reload:url" content="{{ frankenphpHotReload }}">
+        <script src="https://cdn.jsdelivr.net/npm/idiomorph"></script>
+        <script src="https://cdn.jsdelivr.net/npm/frankenphp-hot-reload/+esm" type="module"></script>
+        {% endif %}
+    </head>
+    <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+        <a class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:rounded-md focus:bg-indigo-500 focus:px-4 focus:py-2 focus:text-white" href="#contenu-principal">
+            Aller au contenu principal
+        </a>
+
+        {% if app.user %}
+            <header class="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 lg:px-8">
+                <div class="ui-card">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-slate-400">Compte connecté</p>
+                            <p class="text-lg font-semibold">{{ app.user.userIdentifier }}</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            {% set accountParams = is_granted('ROLE_ADMIN') and currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : {} %}
+                            {% if is_granted('ROLE_ADMIN') %}
+                                <a class="ui-button-secondary" href="{{ path('app_admin_accounts') }}">Comptes (admin)</a>
+                            {% endif %}
+                            <a class="ui-button-secondary" href="{{ path('app_user_account', accountParams) }}">Compte</a>
+                            <a class="ui-button-secondary" href="{{ path('app_user_responder_edit', accountParams) }}">Répondeur</a>
+                            <a class="ui-button-secondary" href="{{ path('app_user_redirections', accountParams) }}">Redirections</a>
+                            <form method="post" action="{{ path('_logout_main') }}">
+                                <button type="submit" class="ui-button-primary">Déconnexion</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </header>
+        {% endif %}
+
+        {% block body %}{% endblock %}
+    </body>
+</html>
