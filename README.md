@@ -76,7 +76,6 @@ Variables deja preparees dans `.env`:
 - `OVH_CONSUMER_KEY`
 - `OVH_ENDPOINT`
 - `MAILER_DSN`
-- `EMAIL_LOGIN_DEV_CODE`
 
 ## Plan d'implementation detaille
 
