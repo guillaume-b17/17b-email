@@ -378,6 +378,21 @@ final class AccountController extends AbstractController
 
         $destinationEmail = mb_strtolower(trim((string) $request->request->get('destinationEmail', '')));
         $localCopy = '1' === (string) $request->request->get('localCopy', '0');
+        $startsAt = $this->parseDateTime((string) $request->request->get('startsAt', ''));
+        $endsAt = $this->parseDateTime((string) $request->request->get('endsAt', ''));
+
+        if ($startsAt instanceof \DateTimeImmutable && $endsAt instanceof \DateTimeImmutable && $startsAt > $endsAt) {
+            $this->addFlash('error', 'La date de fin doit être après la date de début.');
+
+            return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+        }
+
+        $now = new \DateTimeImmutable('now', new \DateTimeZone(self::APP_TIMEZONE));
+        if ($endsAt instanceof \DateTimeImmutable && $endsAt < $now) {
+            $this->addFlash('error', 'La date de fin est déjà passée.');
+
+            return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+        }
         if (!filter_var($destinationEmail, FILTER_VALIDATE_EMAIL)) {
             $this->addFlash('error', 'Adresse de destination invalide.');
 
@@ -391,18 +406,26 @@ final class AccountController extends AbstractController
         }
 
         try {
-            $ovhId = $this->ovhRedirectionManager->create($emailAccount, $destinationEmail, $localCopy);
-
             $redirection = new Redirection($emailAccount->getOwner(), $emailAccount, $emailAccount->getEmail(), $destinationEmail);
             $redirection
-                ->setOvhId($ovhId)
-                ->setEnabled(true)
-                ->setLocalCopy($localCopy);
+                ->setLocalCopy($localCopy)
+                ->setStartsAt($startsAt)
+                ->setEndsAt($endsAt);
+
+            $shouldBeActiveNow = (null === $startsAt || $startsAt <= $now) && (null === $endsAt || $endsAt > $now);
+            if ($shouldBeActiveNow) {
+                $ovhId = $this->ovhRedirectionManager->create($emailAccount, $destinationEmail, $localCopy);
+                $redirection
+                    ->setOvhId($ovhId)
+                    ->setEnabled(true);
+                $this->addFlash('success', 'Redirection créée.');
+            } else {
+                $redirection->setEnabled(false);
+                $this->addFlash('success', 'Redirection programmée. Elle sera appliquée automatiquement.');
+            }
 
             $this->entityManager->persist($redirection);
             $this->entityManager->flush();
-
-            $this->addFlash('success', 'Redirection créée.');
         } catch (\Throwable $exception) {
             $this->addFlash('error', "Erreur création redirection: {$exception->getMessage()}");
         }
@@ -443,6 +466,13 @@ final class AccountController extends AbstractController
         }
 
         $destinationEmail = mb_strtolower(trim((string) $request->request->get('destinationEmail', '')));
+        $startsAt = $this->parseDateTime((string) $request->request->get('startsAt', ''));
+        $endsAt = $this->parseDateTime((string) $request->request->get('endsAt', ''));
+        if ($startsAt instanceof \DateTimeImmutable && $endsAt instanceof \DateTimeImmutable && $startsAt > $endsAt) {
+            $this->addFlash('error', 'La date de fin doit être après la date de début.');
+
+            return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+        }
         if (!filter_var($destinationEmail, FILTER_VALIDATE_EMAIL)) {
             $this->addFlash('error', 'Adresse de destination invalide.');
 
@@ -456,8 +486,14 @@ final class AccountController extends AbstractController
         }
 
         try {
-            $this->ovhRedirectionManager->update($redirection, $emailAccount, $destinationEmail);
-            $redirection->setDestinationEmail($destinationEmail);
+            if (null !== $redirection->getOvhId()) {
+                $this->ovhRedirectionManager->update($redirection, $emailAccount, $destinationEmail);
+            }
+
+            $redirection
+                ->setDestinationEmail($destinationEmail)
+                ->setStartsAt($startsAt)
+                ->setEndsAt($endsAt);
             $this->entityManager->flush();
 
             $this->addFlash('success', 'Redirection modifiée.');

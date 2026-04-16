@@ -1,10 +1,67 @@
 <!DOCTYPE html>
-<html>
+<html data-theme-enabled="{{ app.user ? '1' : '0' }}">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{% block title %}{{ app_name }}{% endblock %}</title>
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22><text y=%221.2em%22 font-size=%2296%22>⚫️</text><text y=%221.3em%22 x=%220.2em%22 font-size=%2276%22 fill=%22%23fff%22>sf</text></svg>">
+        <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='14' width='52' height='36' rx='4' ry='4' fill='white' stroke='black' stroke-width='4'/%3E%3Cpath d='M8 18l24 18 24-18' fill='none' stroke='black' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+        <script>
+            (() => {
+                const root = document.documentElement;
+                const resolveDayPeriod = () => {
+                    const hour = Number(
+                        new Intl.DateTimeFormat('fr-FR', {
+                            hour: 'numeric',
+                            hour12: false,
+                            timeZone: 'Europe/Paris'
+                        }).format(new Date())
+                    );
+
+                    if (hour >= 6 && hour < 10) {
+                        return 'dawn';
+                    }
+
+                    if (hour >= 10 && hour < 18) {
+                        return 'day';
+                    }
+
+                    if (hour >= 18 && hour < 22) {
+                        return 'sunset';
+                    }
+
+                    return 'night';
+                };
+
+                const updateDayUi = () => {
+                    root.setAttribute('data-day-period', resolveDayPeriod());
+                };
+
+                updateDayUi();
+                document.addEventListener('DOMContentLoaded', updateDayUi);
+
+                // Met à jour le fond si la session reste ouverte longtemps.
+                setInterval(() => {
+                    updateDayUi();
+                }, 5 * 60 * 1000);
+            })();
+        </script>
+        <script>
+            (() => {
+                try {
+                    const themeEnabled = '1' === document.documentElement.getAttribute('data-theme-enabled');
+                    if (!themeEnabled) {
+                        return;
+                    }
+
+                    const savedTheme = localStorage.getItem('app_theme');
+                    if ('light' === savedTheme || 'dark' === savedTheme || 'bw' === savedTheme) {
+                        document.documentElement.setAttribute('data-theme', savedTheme);
+                    }
+                } catch (error) {
+                    // Ignore localStorage access errors.
+                }
+            })();
+        </script>
         {% block stylesheets %}
             <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
         {% endblock %}
@@ -20,7 +77,7 @@
         <script src="https://cdn.jsdelivr.net/npm/frankenphp-hot-reload/+esm" type="module"></script>
         {% endif %}
     </head>
-    <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+    <body class="min-h-screen antialiased">
         <a class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:rounded-md focus:bg-indigo-500 focus:px-4 focus:py-2 focus:text-white" href="#contenu-principal">
             Aller au contenu principal
         </a>
@@ -44,6 +101,14 @@
                             <form method="post" action="{{ path('_logout_main') }}">
                                 <button type="submit" class="ui-button-primary">Déconnexion</button>
                             </form>
+                            <div class="theme-switch-wrapper">
+                                <label class="sr-only" for="theme-switch">Thème d'affichage</label>
+                                <select id="theme-switch" class="ui-theme-select" aria-label="Choisir le thème d'affichage">
+                                    <option value="dark">Dark</option>
+                                    <option value="light">Light</option>
+                                    <option value="bw">Noir & blanc</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -51,5 +116,113 @@
         {% endif %}
 
         {% block body %}{% endblock %}
+        <aside id="weather-widget" class="weather-widget hidden" aria-live="polite">
+            <span id="weather-icon" class="text-lg leading-none">-</span>
+            <span id="weather-temperature" class="font-semibold">--.-</span>
+        </aside>
+        <script>
+            (() => {
+                const root = document.documentElement;
+                const selector = document.getElementById('theme-switch');
+                if (!selector) {
+                    return;
+                }
+
+                const currentTheme = root.getAttribute('data-theme') || 'dark';
+                selector.value = currentTheme;
+
+                selector.addEventListener('change', () => {
+                    const nextTheme = selector.value;
+                    root.setAttribute('data-theme', nextTheme);
+
+                    try {
+                        localStorage.setItem('app_theme', nextTheme);
+                    } catch (error) {
+                        // Ignore localStorage access errors.
+                    }
+                });
+            })();
+        </script>
+        <script>
+            (() => {
+                const widget = document.getElementById('weather-widget');
+                const icon = document.getElementById('weather-icon');
+                const temperature = document.getElementById('weather-temperature');
+                if (!widget || !icon || !temperature) {
+                    return;
+                }
+
+                const mapWeather = (code, isDay) => {
+                    if ([0].includes(code)) {
+                        return {
+                            icon: isDay ? '☀️' : '🌙',
+                            label: isDay ? 'Soleil' : 'Ciel dégagé'
+                        };
+                    }
+
+                    if ([1, 2].includes(code)) {
+                        return {
+                            icon: isDay ? '⛅' : '☁️',
+                            label: 'Partiellement nuageux'
+                        };
+                    }
+
+                    if ([3].includes(code)) {
+                        return { icon: '☁️', label: 'Nuageux' };
+                    }
+
+                    if ([45, 48].includes(code)) {
+                        return { icon: '🌫️', label: 'Brume' };
+                    }
+
+                    if ([51, 53, 55, 56, 57].includes(code)) {
+                        return { icon: '🌦️', label: 'Bruine' };
+                    }
+
+                    if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) {
+                        return { icon: '🌧️', label: 'Pluie' };
+                    }
+
+                    if ([71, 73, 75, 77, 85, 86].includes(code)) {
+                        return { icon: '❄️', label: 'Neige' };
+                    }
+
+                    if ([95, 96, 99].includes(code)) {
+                        return { icon: '⛈️', label: 'Orage' };
+                    }
+
+                    return { icon: '🌤️', label: 'Météo' };
+                };
+
+                const url = 'https://api.open-meteo.com/v1/forecast?latitude=47.2081&longitude=-1.5033&current=temperature_2m,weather_code,is_day&timezone=Europe%2FParis';
+
+                fetch(url)
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error('Weather API unavailable');
+                        }
+
+                        return response.json();
+                    })
+                    .then((payload) => {
+                        if (!payload.current) {
+                            throw new Error('Missing weather payload');
+                        }
+
+                        const weatherCode = Number(payload.current.weather_code ?? -1);
+                        const isDay = 1 === Number(payload.current.is_day ?? 1);
+                        const weather = mapWeather(weatherCode, isDay);
+                        const roundedTemp = Number(payload.current.temperature_2m ?? 0).toFixed(1);
+
+                        icon.textContent = weather.icon;
+                        temperature.textContent = `${roundedTemp}°C`;
+                        widget.title = `Saint-Sébastien-sur-Loire : ${weather.label}`;
+                        widget.classList.remove('hidden');
+                    })
+                    .catch(() => {
+                        widget.classList.add('hidden');
+                    });
+            })();
+        </script>
     </body>
 </html>

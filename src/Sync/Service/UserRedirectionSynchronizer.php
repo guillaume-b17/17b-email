@@ -115,6 +115,15 @@ final class UserRedirectionSynchronizer
                 continue;
             }
 
+            // Conserve les redirections programmées "en attente" (pas encore créées chez OVH).
+            if (
+                null === $currentOvhId
+                && $currentRedirection->isScheduled()
+                && $currentRedirection->getSourceEmail() === $email
+            ) {
+                continue;
+            }
+
             $this->entityManager->remove($currentRedirection);
             ++$removed;
         }

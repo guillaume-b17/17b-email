@@ -30,6 +30,12 @@ class Redirection
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $ovhId = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $startsAt = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $endsAt = null;
+
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
 
@@ -122,6 +128,37 @@ class Redirection
         $this->touch();
 
         return $this;
+    }
+
+    public function getStartsAt(): ?\DateTimeImmutable
+    {
+        return $this->startsAt;
+    }
+
+    public function setStartsAt(?\DateTimeImmutable $startsAt): self
+    {
+        $this->startsAt = $startsAt;
+        $this->touch();
+
+        return $this;
+    }
+
+    public function getEndsAt(): ?\DateTimeImmutable
+    {
+        return $this->endsAt;
+    }
+
+    public function setEndsAt(?\DateTimeImmutable $endsAt): self
+    {
+        $this->endsAt = $endsAt;
+        $this->touch();
+
+        return $this;
+    }
+
+    public function isScheduled(): bool
+    {
+        return $this->startsAt instanceof \DateTimeImmutable || $this->endsAt instanceof \DateTimeImmutable;
     }
 
     public function getEmailAccount(): EmailAccount

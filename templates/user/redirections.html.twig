@@ -54,6 +54,26 @@
                     >
                     <button type="submit" class="ui-button-primary">Créer</button>
                 </div>
+                <div class="grid gap-2 sm:grid-cols-2">
+                    <div class="space-y-1">
+                        <label for="new_redirection_starts_at" class="text-xs uppercase tracking-wide text-slate-400">Début (optionnel)</label>
+                        <input
+                            id="new_redirection_starts_at"
+                            name="startsAt"
+                            type="datetime-local"
+                            class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                        >
+                    </div>
+                    <div class="space-y-1">
+                        <label for="new_redirection_ends_at" class="text-xs uppercase tracking-wide text-slate-400">Fin (optionnel)</label>
+                        <input
+                            id="new_redirection_ends_at"
+                            name="endsAt"
+                            type="datetime-local"
+                            class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                        >
+                    </div>
+                </div>
                 <label class="flex items-center gap-2 text-sm text-slate-300">
                     <input type="checkbox" name="localCopy" value="1" class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-400">
                     Conserver une copie des mails sur le serveur OVH
@@ -69,6 +89,8 @@
                             <tr>
                                 <th class="px-3 py-2 text-left font-medium">Depuis</th>
                                 <th class="px-3 py-2 text-left font-medium">Vers</th>
+                                <th class="px-3 py-2 text-left font-medium">Début</th>
+                                <th class="px-3 py-2 text-left font-medium">Fin</th>
                                 <th class="px-3 py-2 text-left font-medium">Copie OVH</th>
                                 <th class="px-3 py-2 text-left font-medium">Actions</th>
                             </tr>
@@ -78,20 +100,42 @@
                                 <tr>
                                     <td class="px-3 py-2 text-slate-100">{{ redirection.sourceEmail }}</td>
                                     <td class="px-3 py-2 text-slate-100">
-                                        <form method="post" action="{{ path('app_user_redirection_update', { id: redirection.id }) }}" class="flex flex-col gap-2 sm:flex-row">
+                                        <form method="post" action="{{ path('app_user_redirection_update', { id: redirection.id }) }}" class="flex flex-col gap-2">
                                             <input type="hidden" name="_token" value="{{ csrf_token('update_redirection_' ~ redirection.id) }}">
                                             {% if accountParams.accountId is defined %}
                                                 <input type="hidden" name="accountId" value="{{ accountParams.accountId }}">
                                             {% endif %}
-                                            <input
-                                                type="email"
-                                                name="destinationEmail"
-                                                required
-                                                value="{{ redirection.destinationEmail }}"
-                                                class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
-                                            >
-                                            <button type="submit" class="ui-button-secondary">Modifier</button>
+                                            <div class="flex flex-col gap-2 sm:flex-row">
+                                                <input
+                                                    type="email"
+                                                    name="destinationEmail"
+                                                    required
+                                                    value="{{ redirection.destinationEmail }}"
+                                                    class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                                                >
+                                                <button type="submit" class="ui-button-secondary">Modifier</button>
+                                            </div>
+                                            <div class="grid gap-2 sm:grid-cols-2">
+                                                <input
+                                                    type="datetime-local"
+                                                    name="startsAt"
+                                                    value="{{ redirection.startsAt ? redirection.startsAt|date('Y-m-d\\TH:i') : '' }}"
+                                                    class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                                                >
+                                                <input
+                                                    type="datetime-local"
+                                                    name="endsAt"
+                                                    value="{{ redirection.endsAt ? redirection.endsAt|date('Y-m-d\\TH:i') : '' }}"
+                                                    class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                                                >
+                                            </div>
                                         </form>
+                                    </td>
+                                    <td class="px-3 py-2 text-slate-100">
+                                        {{ redirection.startsAt ? redirection.startsAt|date('d/m/Y H:i') : '—' }}
+                                    </td>
+                                    <td class="px-3 py-2 text-slate-100">
+                                        {{ redirection.endsAt ? redirection.endsAt|date('d/m/Y H:i') : '—' }}
                                     </td>
                                     <td class="px-3 py-2 text-slate-100">
                                         {% if redirection.localCopy %}

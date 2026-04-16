@@ -1,8 +1,22 @@
 @import "tailwindcss";
 
+:root {
+    --app-dark-accent: #b45309;
+}
+
+html[data-theme='light'] {
+    --app-accent-light: #7c3aed;
+}
+
+html[data-theme='bw'] {
+    --app-accent-bw: #000000;
+}
+
 @layer base {
     body {
         @apply bg-slate-950 text-slate-100;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
     }
 
     h1,
@@ -18,19 +32,130 @@
     :focus-visible {
         @apply outline-2 outline-offset-2 outline-indigo-400;
     }
+
+    html[data-theme='light'] body {
+        @apply bg-slate-100 text-slate-800;
+    }
+
+    html[data-theme='light'] h1,
+    html[data-theme='light'] h2,
+    html[data-theme='light'] h3 {
+        @apply text-slate-900;
+    }
+
+    html[data-theme='light'] a {
+        color: var(--app-accent-light);
+    }
+
+    html[data-theme='light'] a:hover {
+        color: #e0b300;
+    }
+
+    html[data-theme='light'] :focus-visible {
+        outline-color: var(--app-accent-light);
+    }
+
+    html[data-theme='bw'] body {
+        background-color: #ffffff;
+        color: #0f172a;
+    }
+
+    html[data-theme='bw'] h1,
+    html[data-theme='bw'] h2,
+    html[data-theme='bw'] h3 {
+        color: #000000;
+    }
+
+    html[data-theme='bw'] a {
+        color: #111827;
+    }
+
+    html[data-theme='bw'] a:hover {
+        color: #000000;
+    }
+
+    html[data-theme='bw'] :focus-visible {
+        outline-color: #000000;
+    }
+
+    html[data-day-period='night'] body {
+        background-image: linear-gradient(180deg, #020617 0%, #0f172a 45%, #1e293b 100%);
+    }
+
+    html[data-day-period='dawn'] body {
+        background-image: linear-gradient(180deg, #1e293b 0%, #312e81 42%, #7c2d12 100%);
+    }
+
+    html[data-day-period='day'] body {
+        background-image: linear-gradient(180deg, #0f172a 0%, #1d4ed8 50%, #1e3a8a 100%);
+    }
+
+    html[data-day-period='sunset'] body {
+        background-image: linear-gradient(180deg, #0f172a 0%, #7c2d12 46%, #431407 100%);
+    }
+
+    html[data-theme='light'][data-day-period='night'] body {
+        background-image: linear-gradient(180deg, #e2e8f0 0%, #f1f5f9 50%, #f8fafc 100%);
+    }
+
+    html[data-theme='light'][data-day-period='dawn'] body {
+        background-image: linear-gradient(180deg, #fef3c7 0%, #fef9c3 45%, #f8fafc 100%);
+    }
+
+    html[data-theme='light'][data-day-period='day'] body {
+        background-image: linear-gradient(180deg, #e0f2fe 0%, #f0f9ff 52%, #ffffff 100%);
+    }
+
+    html[data-theme='light'][data-day-period='sunset'] body {
+        background-image: linear-gradient(180deg, #ffedd5 0%, #fff7ed 46%, #ffffff 100%);
+    }
+
+    html[data-theme='bw'][data-day-period='night'] body {
+        background-image: linear-gradient(180deg, #e5e7eb 0%, #f3f4f6 50%, #ffffff 100%);
+    }
+
+    html[data-theme='bw'][data-day-period='dawn'] body,
+    html[data-theme='bw'][data-day-period='day'] body,
+    html[data-theme='bw'][data-day-period='sunset'] body {
+        background-image: linear-gradient(180deg, #f3f4f6 0%, #f9fafb 55%, #ffffff 100%);
+    }
 }
 
 @layer components {
+    .bg-strategie-digitale {
+        background: var(--wp--preset--color--digitalbg);
+    }
+
     .ui-card {
         @apply rounded-xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm shadow-black/20 backdrop-blur;
     }
 
     .ui-button-primary {
-        @apply inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60;
+        @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+        background-color: var(--app-dark-accent);
     }
 
     .ui-button-secondary {
-        @apply inline-flex items-center justify-center gap-2 rounded-lg border border-blue-500/50 bg-blue-950 px-4 py-2 text-sm font-semibold text-blue-100 transition-colors hover:bg-blue-900;
+        @apply inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold text-blue-100 transition-colors;
+        border-color: color-mix(in srgb, var(--app-dark-accent) 50%, transparent);
+        background-color: #0b1220;
+    }
+
+    .ui-button-primary:hover {
+        filter: brightness(1.08);
+    }
+
+    .ui-button-secondary:hover {
+        background-color: #172136;
+    }
+
+    .ui-theme-select {
+        @apply rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-100;
+    }
+
+
+    .weather-widget {
+        @apply fixed bottom-3 left-3 z-50 inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/95 px-3 py-1 text-sm text-slate-100 shadow-md shadow-black/20;
     }
 
     .ui-button-primary::before,
@@ -42,5 +167,124 @@
         background-color: currentColor;
         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='black'%3E%3Cpath fill-rule='evenodd' d='M4.25 10a.75.75 0 01.75-.75h8.19L9.22 5.28a.75.75 0 111.06-1.06l5.25 5.25a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 01-1.06-1.06l3.97-3.97H5a.75.75 0 01-.75-.75z' clip-rule='evenodd'/%3E%3C/svg%3E") center / contain no-repeat;
         mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='black'%3E%3Cpath fill-rule='evenodd' d='M4.25 10a.75.75 0 01.75-.75h8.19L9.22 5.28a.75.75 0 111.06-1.06l5.25 5.25a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 01-1.06-1.06l3.97-3.97H5a.75.75 0 01-.75-.75z' clip-rule='evenodd'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+
+    html[data-theme='light'] .ui-card {
+        border-color: #e2e8f0;
+        background-color: #ffffff;
+        @apply text-slate-800 shadow-slate-400/10;
+    }
+
+    html[data-theme='light'] .ui-button-primary {
+        @apply text-white;
+        background-color: var(--app-accent-light);
+    }
+
+    html[data-theme='light'] .ui-button-secondary {
+        border-color: color-mix(in srgb, var(--app-accent-light) 50%, transparent);
+        background-color: #f4f0ff;
+        color: #4c1d95;
+    }
+
+    html[data-theme='light'] .ui-button-primary:hover {
+        background-color: #6d28d9;
+        filter: none;
+    }
+
+    html[data-theme='light'] .ui-button-secondary:hover {
+        background-color: #e9ddff;
+    }
+
+    html[data-theme='light'] .ui-theme-select {
+        @apply border-slate-300 bg-white text-slate-800;
+    }
+
+
+    html[data-theme='light'] .weather-widget {
+        @apply border-slate-300 bg-white text-slate-800 shadow-slate-400/20;
+    }
+
+    html[data-theme='light'] [class*='text-slate-100'] {
+        color: #0f172a;
+    }
+
+    html[data-theme='light'] [class*='text-slate-200'] {
+        color: #1e293b;
+    }
+
+    html[data-theme='light'] [class*='text-slate-300'],
+    html[data-theme='light'] [class*='text-slate-400'] {
+        color: #475569;
+    }
+
+    html[data-theme='light'] [class*='border-slate-7'],
+    html[data-theme='light'] [class*='border-slate-8'] {
+        border-color: #cbd5e1;
+    }
+
+    html[data-theme='light'] [class*='bg-slate-95'],
+    html[data-theme='light'] [class*='bg-slate-90'] {
+        background-color: #ffffff;
+    }
+
+    html[data-theme='light'] .bg-slate-950\/40 {
+        background-color: transparent !important;
+    }
+
+    html[data-theme='bw'] .ui-card {
+        border-color: #d1d5db;
+        background-color: #ffffff;
+        color: #111827;
+        box-shadow: none;
+    }
+
+    html[data-theme='bw'] .ui-button-primary {
+        background-color: var(--app-accent-bw);
+        color: #ffffff;
+    }
+
+    html[data-theme='bw'] .ui-button-primary:hover {
+        background-color: #1f2937;
+        filter: none;
+    }
+
+    html[data-theme='bw'] .ui-button-secondary {
+        border-color: #111827;
+        background-color: #ffffff;
+        color: #111827;
+    }
+
+    html[data-theme='bw'] .ui-button-secondary:hover {
+        background-color: #f3f4f6;
+    }
+
+    html[data-theme='bw'] .ui-theme-select {
+        border-color: #d1d5db;
+        background-color: #ffffff;
+        color: #111827;
+    }
+
+
+    html[data-theme='bw'] .weather-widget {
+        border-color: #d1d5db;
+        background-color: #ffffff;
+        color: #111827;
+        box-shadow: none;
+    }
+
+    html[data-theme='bw'] [class*='text-slate-100'],
+    html[data-theme='bw'] [class*='text-slate-200'],
+    html[data-theme='bw'] [class*='text-slate-300'],
+    html[data-theme='bw'] [class*='text-slate-400'] {
+        color: #374151;
+    }
+
+    html[data-theme='bw'] [class*='border-slate-7'],
+    html[data-theme='bw'] [class*='border-slate-8'] {
+        border-color: #d1d5db;
+    }
+
+    html[data-theme='bw'] .bg-slate-950\/40 {
+        background-color: transparent !important;
     }
 }
