@@ -9,6 +9,7 @@ use App\Entity\EmailAccount;
 final class OvhResponderManager
 {
     private const APP_TIMEZONE = 'Europe/Paris';
+    private OvhApiClient $ovhApiClient;
 
     /**
      * @param array{
@@ -19,9 +20,9 @@ final class OvhResponderManager
      *     endsAt: ?\DateTimeImmutable
      * } $data
      */
-    public function __construct(
-        private readonly OvhApiClient $ovhApiClient,
-    ) {
+    public function __construct(OvhApiClient $ovhApiClient)
+    {
+        $this->ovhApiClient = $ovhApiClient;
     }
 
     /**
@@ -40,6 +41,7 @@ final class OvhResponderManager
         $putPayload = $this->buildPutPayload($data);
         $postPayload = $this->buildPostPayload($emailAccount, $data);
         $errors = [];
+        $putNotFound = false;
 
         foreach ($accountPathCandidates as $path) {
             try {
@@ -48,7 +50,25 @@ final class OvhResponderManager
                 return;
             } catch (\Throwable $putException) {
                 $errors[] = sprintf('PUT %s: %s', $path, $putException->getMessage());
+                if ($this->looksLikeNotFound($putException)) {
+                    $putNotFound = true;
+                    continue;
+                }
+
+                if ($this->looksLikeProcessingConflict($putException)) {
+                    throw new \RuntimeException(
+                        "Impossible d'enregistrer le répondeur OVH : OVH est déjà en train de traiter ce répondeur. Réessayez dans quelques instants.\n".implode("\n", $errors),
+                        0,
+                        $putException
+                    );
+                }
+
+                throw new \RuntimeException("Impossible d'enregistrer le répondeur OVH.\n".implode("\n", $errors), 0, $putException);
             }
+        }
+
+        if (!$putNotFound) {
+            throw new \RuntimeException("Impossible d'enregistrer le répondeur OVH.\n".implode("\n", $errors));
         }
 
         foreach ($collectionPathCandidates as $path) {
@@ -324,5 +344,22 @@ final class OvhResponderManager
         [$localPart] = explode('@', $email, 2);
 
         return $localPart;
+    }
+
+    private function looksLikeNotFound(\Throwable $exception): bool
+    {
+        $message = mb_strtolower($exception->getMessage());
+
+        return str_contains($message, '404')
+            || str_contains($message, 'not found')
+            || str_contains($message, 'does not exist');
+    }
+
+    private function looksLikeProcessingConflict(\Throwable $exception): bool
+    {
+        $message = mb_strtolower($exception->getMessage());
+
+        return str_contains($message, '409')
+            && (str_contains($message, 'already being processed') || str_contains($message, 'please try later'));
     }
 }

@@ -41,8 +41,6 @@ final class OtpLoginController extends AbstractController
         private readonly RateLimiterFactory $otpRequestLimiter,
         #[Autowire(service: 'limiter.otp_verify')]
         private readonly RateLimiterFactory $otpVerifyLimiter,
-        #[Autowire('%env(string:EMAIL_LOGIN_DEV_CODE)%')]
-        private readonly string $devOtpCode,
     ) {
     }
 
@@ -63,7 +61,7 @@ final class OtpLoginController extends AbstractController
             $rateLimit = $limiter->consume();
 
             if ($rateLimit->isAccepted() && $this->allowedEmailChecker->isAllowed($email)) {
-                $code = '' !== trim($this->devOtpCode) ? trim($this->devOtpCode) : $this->otpCodeManager->generateCode();
+                $code = $this->otpCodeManager->generateCode();
                 $challenge = new EmailLoginChallenge(
                     $email,
                     $this->otpCodeManager->hashCode($email, $code),
@@ -178,7 +176,7 @@ final class OtpLoginController extends AbstractController
     private function sendOtpEmail(string $email, string $code): void
     {
         $mail = (new TemplatedEmail())
-            ->from(new Address('no-reply@b17.fr', 'OVH Mail Manager'))
+            ->from(new Address('no-reply@agence-b17.dev', 'OVH Mail Manager'))
             ->to($email)
             ->subject('Votre code de connexion')
             ->htmlTemplate('auth/email/otp_code.html.twig')

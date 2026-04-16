@@ -241,6 +241,9 @@ final class AccountController extends AbstractController
         $rawEndsAt = (string) $request->request->get('endsAt', '');
         $startsAt = $this->parseDateTime($rawStartsAt);
         $endsAt = $this->parseDateTime($rawEndsAt);
+        $timeZone = new \DateTimeZone(self::APP_TIMEZONE);
+        $now = new \DateTimeImmutable('now', $timeZone);
+        $now = $now->setTime((int) $now->format('H'), (int) $now->format('i'), 0);
 
         if ('' !== trim($rawStartsAt) && !$startsAt instanceof \DateTimeImmutable) {
             $this->addFlash('error', 'La date de début est invalide.');
@@ -270,6 +273,11 @@ final class AccountController extends AbstractController
             $this->addFlash('error', 'La date de fin doit être après la date de début.');
 
             return $this->redirectToRoute('app_user_responder_edit', $this->managedAccountRouteParams($emailAccount));
+        }
+
+        if ($startsAt instanceof \DateTimeImmutable && $startsAt < $now) {
+            $startsAt = $now;
+            $this->addFlash('success', 'Date de début anté-datée : elle a été ajustée à maintenant.');
         }
 
         $message = $this->responderMessagePresetProvider->applyVariables($message, $startsAt, $endsAt);
