@@ -153,6 +153,100 @@ html[data-theme='bw'] {
         @apply rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-100;
     }
 
+    .ui-help-button {
+        @apply inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-sm font-bold text-slate-100 transition-colors hover:bg-slate-800;
+    }
+
+    .tour-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: rgba(2, 6, 23, 0.72);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .tour-modal {
+        width: min(42rem, 100%);
+        border-radius: 1rem;
+        border: 1px solid rgb(30 41 59);
+        background: rgba(15, 23, 42, 0.95);
+        color: rgb(226 232 240);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        padding: 1rem;
+        backdrop-filter: blur(10px);
+    }
+
+    .tour-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .tour-title {
+        font-weight: 700;
+        color: rgb(248 250 252);
+    }
+
+    .tour-close {
+        border: 1px solid rgb(51 65 85);
+        background: rgba(2, 6, 23, 0.55);
+        color: rgb(226 232 240);
+        border-radius: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    .tour-body {
+        margin-top: 0.75rem;
+        font-size: 0.95rem;
+        line-height: 1.4;
+        color: rgb(226 232 240);
+        white-space: pre-line;
+    }
+
+    .tour-footer {
+        margin-top: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .tour-progress {
+        font-size: 0.85rem;
+        color: rgb(148 163 184);
+    }
+
+    .tour-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .tour-prev,
+    .tour-next {
+        border-radius: 0.75rem;
+        padding: 0.5rem 0.75rem;
+        font-weight: 700;
+        border: 1px solid rgb(51 65 85);
+        background: rgba(2, 6, 23, 0.55);
+        color: rgb(226 232 240);
+    }
+
+    .tour-prev:disabled {
+        opacity: 0.5;
+    }
+
+    .tour-highlight {
+        outline: 3px solid rgb(250 204 21);
+        outline-offset: 4px;
+        border-radius: 0.75rem;
+    }
+
 
     .weather-widget {
         @apply fixed bottom-3 left-3 z-50 inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/95 px-3 py-1 text-sm text-slate-100 shadow-md shadow-black/20;
@@ -197,6 +291,28 @@ html[data-theme='bw'] {
 
     html[data-theme='light'] .ui-theme-select {
         @apply border-slate-300 bg-white text-slate-800;
+    }
+
+    html[data-theme='light'] .ui-help-button {
+        @apply border-slate-300 bg-white text-slate-800 hover:bg-slate-100;
+    }
+
+    html[data-theme='light'] .tour-modal {
+        border-color: rgb(203 213 225);
+        background: rgba(255, 255, 255, 0.96);
+        color: rgb(15 23 42);
+    }
+
+    html[data-theme='light'] .tour-title {
+        color: rgb(15 23 42);
+    }
+
+    html[data-theme='light'] .tour-close,
+    html[data-theme='light'] .tour-prev,
+    html[data-theme='light'] .tour-next {
+        border-color: rgb(203 213 225);
+        background: rgb(248 250 252);
+        color: rgb(15 23 42);
     }
 
 
@@ -261,6 +377,31 @@ html[data-theme='bw'] {
     html[data-theme='bw'] .ui-theme-select {
         border-color: #d1d5db;
         background-color: #ffffff;
+        color: #111827;
+    }
+
+    html[data-theme='bw'] .ui-help-button {
+        border-color: #d1d5db;
+        background-color: #ffffff;
+        color: #111827;
+    }
+
+    html[data-theme='bw'] .tour-modal {
+        border-color: #d1d5db;
+        background: rgba(255, 255, 255, 0.98);
+        color: #111827;
+        box-shadow: none;
+    }
+
+    html[data-theme='bw'] .tour-title {
+        color: #000000;
+    }
+
+    html[data-theme='bw'] .tour-close,
+    html[data-theme='bw'] .tour-prev,
+    html[data-theme='bw'] .tour-next {
+        border-color: #d1d5db;
+        background: #ffffff;
         color: #111827;
     }
 

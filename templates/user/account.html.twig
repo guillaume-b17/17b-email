@@ -6,10 +6,6 @@
     {% set accountParams = isAdminContext is defined and isAdminContext and currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : {} %}
     <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
         <section class="ui-card space-y-4">
-            <div class="flex flex-wrap gap-2">
-                <a class="ui-button-primary" href="{{ path('app_user_account', accountParams|merge({ sync: 1 })) }}">Synchroniser OVH</a>
-                <a class="ui-button-secondary" href="{{ path('app_user_account', accountParams|merge({ syncResponder: 1 })) }}">Récupérer le répondeur</a>
-            </div>
             {% for message in app.flashes('success') %}
                 {% include 'components/ui/alert.html.twig' with {
                     tone: 'success',
@@ -37,7 +33,7 @@
 
         {% if emailAccount %}
             <section class="flex flex-col gap-6">
-                <article class="ui-card">
+                <article class="ui-card" data-tour="card-account">
                 <h2 class="text-xl font-semibold">Informations du compte e-mail</h2>
                 <dl class="grid gap-4 sm:grid-cols-2">
                     <div>
@@ -76,7 +72,7 @@
                 </dl>
                 </article>
 
-                <article class="ui-card space-y-5">
+                <article class="ui-card space-y-5" data-tour="card-responder">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 class="text-xl font-semibold">Répondeur</h2>
@@ -126,7 +122,7 @@
                 {% endif %}
                 </article>
 
-                <article class="ui-card">
+                <article class="ui-card" data-tour="card-redirections">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 class="text-xl font-semibold">Redirections</h2>
@@ -155,7 +151,7 @@
             {% include 'components/ui/alert.html.twig' with {
                 tone: 'info',
                 title: 'Aucune donnée',
-                message: 'Cliquez sur "Synchroniser OVH" pour récupérer vos informations de boîte e-mail.'
+                message: 'Les données se synchronisent automatiquement à la connexion.'
             } %}
         {% endif %}
     </main>

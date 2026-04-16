@@ -37,6 +37,12 @@ class User implements UserInterface
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $lastLoginAt = null;
 
+    #[ORM\Column(length: 120, nullable: true)]
+    private ?string $firstName = null;
+
+    #[ORM\Column(length: 120, nullable: true)]
+    private ?string $lastName = null;
+
     /**
      * @var Collection<int, EmailAccount>
      */
@@ -121,6 +127,43 @@ class User implements UserInterface
         $this->touch();
 
         return $this;
+    }
+
+    public function getFirstName(): ?string
+    {
+        return $this->firstName;
+    }
+
+    public function setFirstName(?string $firstName): self
+    {
+        $firstName = null !== $firstName ? trim($firstName) : null;
+        $this->firstName = '' === $firstName ? null : $firstName;
+        $this->touch();
+
+        return $this;
+    }
+
+    public function getLastName(): ?string
+    {
+        return $this->lastName;
+    }
+
+    public function setLastName(?string $lastName): self
+    {
+        $lastName = null !== $lastName ? trim($lastName) : null;
+        $this->lastName = '' === $lastName ? null : $lastName;
+        $this->touch();
+
+        return $this;
+    }
+
+    public function displayName(): ?string
+    {
+        $firstName = $this->firstName ? trim($this->firstName) : '';
+        $lastName = $this->lastName ? trim($this->lastName) : '';
+        $full = trim($firstName.' '.$lastName);
+
+        return '' !== $full ? $full : null;
     }
 
     /**

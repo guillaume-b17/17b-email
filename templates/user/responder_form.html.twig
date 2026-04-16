@@ -11,7 +11,10 @@
                     <h1 class="text-2xl font-semibold">Répondeur automatique</h1>
                     <p class="mt-1 text-sm text-slate-300">Adresse concernée: {{ emailAccount.email }}</p>
                 </div>
-                <a class="ui-button-secondary" href="{{ path('app_user_account', accountParams) }}">Retour au compte</a>
+                <div class="flex flex-wrap gap-2">
+                    <a class="ui-button-secondary" href="{{ path('app_user_account', accountParams) }}">Retour au compte</a>
+                    <a class="ui-button-primary" href="{{ path('app_user_account', accountParams|merge({ syncResponder: 1 })) }}">Synchroniser OVH</a>
+                </div>
             </div>
 
             {% for message in app.flashes('success') %}
@@ -36,8 +39,62 @@
                     <input type="hidden" name="accountId" value="{{ accountParams.accountId }}">
                 {% endif %}
 
+                <div class="rounded-xl border border-slate-700 bg-slate-950/50 p-4">
+                    <h2 class="text-sm font-semibold text-slate-100">Période d’absence</h2>
+                    <p class="mt-1 text-sm text-slate-300">Ces dates sont utilisées dans les messages via <code>{date_debut}</code> et <code>{date_fin}</code>.</p>
+                    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div class="space-y-1">
+                            <label for="responder_starts_at" class="text-sm font-medium text-slate-100">Début</label>
+                            <input
+                                id="responder_starts_at"
+                                name="startsAt"
+                                type="datetime-local"
+                                class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                                value="{{ responder and responder.startsAt ? responder.startsAt|date('Y-m-d\\TH:i') : '' }}"
+                            >
+                        </div>
+                        <div class="space-y-1">
+                            <label for="responder_ends_at" class="text-sm font-medium text-slate-100">Retour</label>
+                            <input
+                                id="responder_ends_at"
+                                name="endsAt"
+                                type="datetime-local"
+                                class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                                min="{{ responder and responder.startsAt ? responder.startsAt|date('Y-m-d\\TH:i') : '' }}"
+                                value="{{ responder and responder.endsAt ? responder.endsAt|date('Y-m-d\\TH:i') : '' }}"
+                            >
+                        </div>
+                    </div>
+                    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div class="space-y-1">
+                            <label for="responder_first_name" class="text-sm font-medium text-slate-100">Prénom</label>
+                            <input
+                                id="responder_first_name"
+                                name="firstName"
+                                type="text"
+                                autocomplete="given-name"
+                                class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                                value="{{ ownerUser is defined and ownerUser.firstName ? ownerUser.firstName : '' }}"
+                                placeholder="Prénom"
+                            >
+                        </div>
+                        <div class="space-y-1">
+                            <label for="responder_last_name" class="text-sm font-medium text-slate-100">Nom</label>
+                            <input
+                                id="responder_last_name"
+                                name="lastName"
+                                type="text"
+                                autocomplete="family-name"
+                                class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
+                                value="{{ ownerUser is defined and ownerUser.lastName ? ownerUser.lastName : '' }}"
+                                placeholder="Nom"
+                            >
+                        </div>
+                    </div>
+                </div>
+
                 <div class="rounded-lg border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200">
-                    Variables disponibles : <code>{date_debut}</code>, <code>{date_fin}</code>, <code>{telephone_agence}</code><br>
+                    Variables disponibles : <code>{date_debut}</code>, <code>{date_fin}</code>, <code>{telephone_agence}</code>, <code>{prenom_nom}</code><br>
                     Téléphone agence appliqué automatiquement : <span class="font-semibold">{{ agencyPhone }}</span>
                 </div>
 
@@ -53,30 +110,6 @@
                             <option value="{{ key }}">{{ preset.label }}</option>
                         {% endfor %}
                     </select>
-                </div>
-
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div class="space-y-1">
-                        <label for="responder_starts_at" class="text-sm font-medium text-slate-100">Début</label>
-                        <input
-                            id="responder_starts_at"
-                            name="startsAt"
-                            type="datetime-local"
-                            class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
-                            value="{{ responder and responder.startsAt ? responder.startsAt|date('Y-m-d\\TH:i') : '' }}"
-                        >
-                    </div>
-                    <div class="space-y-1">
-                        <label for="responder_ends_at" class="text-sm font-medium text-slate-100">Retour</label>
-                        <input
-                            id="responder_ends_at"
-                            name="endsAt"
-                            type="datetime-local"
-                            class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
-                            min="{{ responder and responder.startsAt ? responder.startsAt|date('Y-m-d\\TH:i') : '' }}"
-                            value="{{ responder and responder.endsAt ? responder.endsAt|date('Y-m-d\\TH:i') : '' }}"
-                        >
-                    </div>
                 </div>
 
                 <div class="space-y-1">
@@ -115,6 +148,8 @@
         document.addEventListener('DOMContentLoaded', () => {
             const startsAt = document.getElementById('responder_starts_at');
             const endsAt = document.getElementById('responder_ends_at');
+            const firstName = document.getElementById('responder_first_name');
+            const lastName = document.getElementById('responder_last_name');
             const presetSelect = document.getElementById('responder_preset');
             const message = document.getElementById('responder_message');
             const presets = {{ messagePresets|json_encode|raw }};
@@ -152,10 +187,13 @@
             };
 
             const applyVariables = (content) => {
+                const fullName = [firstName?.value || '', lastName?.value || ''].join(' ').replace(/\s+/g, ' ').trim();
+
                 return content
                     .replaceAll('{date_debut}', formatDate(startsAt.value))
                     .replaceAll('{date_fin}', formatDate(endsAt.value))
-                    .replaceAll('{telephone_agence}', agencyPhone);
+                    .replaceAll('{telephone_agence}', agencyPhone)
+                    .replaceAll('{prenom_nom}', fullName);
             };
 
             const replaceShortcodesInTextarea = () => {
@@ -186,6 +224,11 @@
                 message.addEventListener('paste', () => {
                     setTimeout(replaceShortcodesInTextarea, 0);
                 });
+
+                if (firstName && lastName) {
+                    firstName.addEventListener('input', replaceShortcodesInTextarea);
+                    lastName.addEventListener('input', replaceShortcodesInTextarea);
+                }
             }
         });
     </script>

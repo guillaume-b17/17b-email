@@ -17,18 +17,20 @@ final class OvhRedirectionManager
     public function create(EmailAccount $emailAccount, string $destinationEmail, bool $localCopy): string
     {
         [$localPart, $domain] = $this->extractLocalPartAndDomain($emailAccount);
+        $sourceEmail = mb_strtolower($emailAccount->getEmail());
         $destinationEmail = mb_strtolower(trim($destinationEmail));
 
         $this->ovhApiClient->post(
             sprintf('/email/domain/%s/redirection', rawurlencode($domain)),
             [
-                'from' => $localPart,
+                // OVH attend une adresse e-mail complète ici (pas uniquement le local-part).
+                'from' => $sourceEmail,
                 'to' => $destinationEmail,
                 'localCopy' => $localCopy,
             ]
         );
 
-        $id = $this->waitForRedirectionId($domain, $localPart, $destinationEmail);
+        $id = $this->waitForRedirectionId($domain, $sourceEmail, $destinationEmail);
         if (null === $id) {
             throw new \RuntimeException("La redirection a été demandée, mais l'identifiant OVH n'a pas pu être récupéré.");
         }
@@ -68,7 +70,7 @@ final class OvhRedirectionManager
         );
     }
 
-    private function waitForRedirectionId(string $domain, string $sourceLocalPart, string $destinationEmail): ?string
+    private function waitForRedirectionId(string $domain, string $sourceEmail, string $destinationEmail): ?string
     {
         for ($attempt = 0; $attempt < 8; ++$attempt) {
             usleep(800000);
@@ -77,7 +79,7 @@ final class OvhRedirectionManager
                 /** @var list<string|int> $ids */
                 $ids = $this->ovhApiClient->get(
                     sprintf('/email/domain/%s/redirection', rawurlencode($domain)),
-                    ['from' => $sourceLocalPart, 'to' => $destinationEmail]
+                    ['from' => $sourceEmail, 'to' => $destinationEmail]
                 );
             } catch (\Throwable) {
                 continue;
@@ -95,7 +97,7 @@ final class OvhRedirectionManager
 
                 $from = $this->normalizeEmail((string) ($detail['from'] ?? ''), $domain);
                 $to = $this->normalizeEmail((string) ($detail['to'] ?? ''), $domain);
-                if ($from === mb_strtolower($sourceLocalPart.'@'.$domain) && $to === mb_strtolower($destinationEmail)) {
+                if ($from === mb_strtolower($sourceEmail) && $to === mb_strtolower($destinationEmail)) {
                     return $id;
                 }
             }

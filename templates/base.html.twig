@@ -53,10 +53,7 @@
                         return;
                     }
 
-                    const savedTheme = localStorage.getItem('app_theme');
-                    if ('light' === savedTheme || 'dark' === savedTheme || 'bw' === savedTheme) {
-                        document.documentElement.setAttribute('data-theme', savedTheme);
-                    }
+                    // Thème unique pour l’instant : dark (pas de persistance / pas de sélecteur).
                 } catch (error) {
                     // Ignore localStorage access errors.
                 }
@@ -90,7 +87,7 @@
                             <p class="text-xs uppercase tracking-wide text-slate-400">Compte connecté</p>
                             <p class="text-lg font-semibold">{{ app.user.userIdentifier }}</p>
                         </div>
-                        <div class="flex flex-wrap gap-2">
+                        <div class="flex flex-wrap gap-2" data-tour="nav">
                             {% set accountParams = is_granted('ROLE_ADMIN') and currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : {} %}
                             {% if is_granted('ROLE_ADMIN') %}
                                 <a class="ui-button-secondary" href="{{ path('app_admin_accounts') }}">Comptes (admin)</a>
@@ -101,14 +98,9 @@
                             <form method="post" action="{{ path('_logout_main') }}">
                                 <button type="submit" class="ui-button-primary">Déconnexion</button>
                             </form>
-                            <div class="theme-switch-wrapper">
-                                <label class="sr-only" for="theme-switch">Thème d'affichage</label>
-                                <select id="theme-switch" class="ui-theme-select" aria-label="Choisir le thème d'affichage">
-                                    <option value="dark">Dark</option>
-                                    <option value="light">Light</option>
-                                    <option value="bw">Noir & blanc</option>
-                                </select>
-                            </div>
+                            <button id="help-tour" type="button" class="ui-help-button" aria-label="Aide (tutoriel)" title="Aide">
+                                ?
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -120,29 +112,6 @@
             <span id="weather-icon" class="text-lg leading-none">-</span>
             <span id="weather-temperature" class="font-semibold">--.-</span>
         </aside>
-        <script>
-            (() => {
-                const root = document.documentElement;
-                const selector = document.getElementById('theme-switch');
-                if (!selector) {
-                    return;
-                }
-
-                const currentTheme = root.getAttribute('data-theme') || 'dark';
-                selector.value = currentTheme;
-
-                selector.addEventListener('change', () => {
-                    const nextTheme = selector.value;
-                    root.setAttribute('data-theme', nextTheme);
-
-                    try {
-                        localStorage.setItem('app_theme', nextTheme);
-                    } catch (error) {
-                        // Ignore localStorage access errors.
-                    }
-                });
-            })();
-        </script>
         <script>
             (() => {
                 const widget = document.getElementById('weather-widget');

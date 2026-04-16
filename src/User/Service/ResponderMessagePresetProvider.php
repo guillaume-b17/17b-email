@@ -24,6 +24,7 @@ Actuellement absente, je prendrai connaissance de votre mail lors de mon retour 
 Pour toute demande urgente, merci de contacter vos interlocuteurs habituels ou l'agence au {telephone_agence}.
 
 Cordialement,
+{prenom_nom}
 TEXT,
             ],
             'absence_homme' => [
@@ -36,6 +37,7 @@ Actuellement absent, je prendrai connaissance de votre mail lors de mon retour l
 Pour toute demande urgente, merci de contacter vos interlocuteurs habituels ou l'agence au {telephone_agence}.
 
 Cordialement,
+{prenom_nom}
 TEXT,
             ],
             'conges' => [
@@ -48,6 +50,7 @@ Je suis en congés du {date_debut} au {date_fin}. Je prendrai connaissance de vo
 Pour toute demande urgente, merci de contacter vos interlocuteurs habituels ou l'agence au {telephone_agence}.
 
 Cordialement,
+{prenom_nom}
 TEXT,
             ],
         ];
@@ -70,12 +73,18 @@ TEXT,
         return $presets[$key]['content'] ?? null;
     }
 
-    public function applyVariables(string $message, ?\DateTimeImmutable $startsAt, ?\DateTimeImmutable $endsAt): string
+    public function applyVariables(string $message, ?\DateTimeImmutable $startsAt, ?\DateTimeImmutable $endsAt, ?string $fullName = null): string
     {
+        $fullName = null !== $fullName ? trim($fullName) : '';
+        if ('' === $fullName) {
+            $fullName = ' ';
+        }
+
         return strtr($message, [
             '{date_debut}' => $this->formatDate($startsAt),
             '{date_fin}' => $this->formatDate($endsAt),
             '{telephone_agence}' => self::AGENCY_PHONE,
+            '{prenom_nom}' => $fullName,
         ]);
     }
 

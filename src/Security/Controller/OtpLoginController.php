@@ -41,6 +41,10 @@ final class OtpLoginController extends AbstractController
         private readonly RateLimiterFactory $otpRequestLimiter,
         #[Autowire(service: 'limiter.otp_verify')]
         private readonly RateLimiterFactory $otpVerifyLimiter,
+        #[Autowire('%kernel.environment%')]
+        private readonly string $appEnvironment,
+        #[Autowire('%env(default::string:EMAIL_LOGIN_DEV_CODE)%')]
+        private readonly string $devLoginCode,
     ) {
     }
 
@@ -105,6 +109,55 @@ final class OtpLoginController extends AbstractController
             $limiter = $this->otpVerifyLimiter->create($email.'|'.$request->getClientIp());
             $rateLimit = $limiter->consume();
             $providedCode = trim((string) $form->get('code')->getData());
+
+            $isDevBypass = \in_array($this->appEnvironment, ['dev', 'test'], true)
+                && '' !== trim($this->devLoginCode)
+                && hash_equals(trim($this->devLoginCode), $providedCode);
+
+            if ($isDevBypass) {
+                if (!$rateLimit->isAccepted()) {
+                    $this->addFlash('error', 'Code invalide ou expire.');
+
+                    return $this->redirectToRoute('app_auth_verify');
+                }
+
+                if (!$this->allowedEmailChecker->isAllowed($email)) {
+                    $this->addFlash('error', 'Code invalide ou expire.');
+
+                    return $this->redirectToRoute('app_auth_verify');
+                }
+
+                $this->logger->info('Connexion OTP via code dev', [
+                    'email' => $email,
+                    'ip' => $request->getClientIp(),
+                ]);
+
+                /** @var User|null $user */
+                $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
+                if (!$user instanceof User) {
+                    $user = new User($email);
+                    $this->entityManager->persist($user);
+                }
+
+                $user->setRoles($this->adminRoleResolver->resolveRoles($email));
+                $user->setLastLoginAt(new \DateTimeImmutable());
+                $this->entityManager->flush();
+
+                try {
+                    $this->userMailboxSynchronizer->synchronize($user);
+                } catch (\Throwable $exception) {
+                    $this->logger->warning('Synchronisation OVH au login impossible', [
+                        'email' => $user->getEmail(),
+                        'exception' => $exception->getMessage(),
+                    ]);
+                }
+
+                $request->getSession()->remove('pending_login_email');
+                $response = $this->security->login($user, OtpLoginAuthenticator::class, 'main');
+
+                return $this->redirectToRoute('app_user_account', ['sync' => 1, 'syncResponder' => 1, 'autoSync' => 1]);
+            }
+
             $challenge = $this->entityManager->getRepository(EmailLoginChallenge::class)->findOneBy(
                 ['email' => $email, 'consumedAt' => null],
                 ['id' => 'DESC']
@@ -164,7 +217,7 @@ final class OtpLoginController extends AbstractController
             $request->getSession()->remove('pending_login_email');
             $response = $this->security->login($user, OtpLoginAuthenticator::class, 'main');
 
-            return $response ?? $this->redirectToRoute('app_user_account');
+            return $this->redirectToRoute('app_user_account', ['sync' => 1, 'syncResponder' => 1, 'autoSync' => 1]);
         }
 
         return $this->render('auth/verify_otp.html.twig', [

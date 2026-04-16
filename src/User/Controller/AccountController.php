@@ -49,7 +49,9 @@ final class AccountController extends AbstractController
         if ('1' === $request->query->get('sync') && $emailAccount instanceof EmailAccount) {
             try {
                 $this->userMailboxSynchronizer->synchronize($emailAccount->getOwner());
-                $this->addFlash('success', 'Synchronisation OVH terminée.');
+                if ('1' !== (string) $request->query->get('autoSync', '0')) {
+                    $this->addFlash('success', 'Synchronisation OVH terminée.');
+                }
             } catch (\Throwable $exception) {
                 $syncError = $exception->getMessage();
                 $this->addFlash('error', 'La synchronisation OVH a échoué.');
@@ -205,6 +207,7 @@ final class AccountController extends AbstractController
         return $this->render('user/responder_form.html.twig', [
             'emailAccount' => $emailAccount,
             'responder' => $responder,
+            'ownerUser' => $emailAccount->getOwner(),
             'messagePresets' => $this->responderMessagePresetProvider->all(),
             'agencyPhone' => $this->responderMessagePresetProvider->phoneNumber(),
             'currentAccountId' => $emailAccount->getId(),
@@ -280,7 +283,17 @@ final class AccountController extends AbstractController
             $this->addFlash('success', 'Date de début anté-datée : elle a été ajustée à maintenant.');
         }
 
-        $message = $this->responderMessagePresetProvider->applyVariables($message, $startsAt, $endsAt);
+        $ownerUser = $emailAccount->getOwner();
+        $ownerUser
+            ->setFirstName((string) $request->request->get('firstName', ''))
+            ->setLastName((string) $request->request->get('lastName', ''));
+
+        $message = $this->responderMessagePresetProvider->applyVariables(
+            $message,
+            $startsAt,
+            $endsAt,
+            $ownerUser->displayName()
+        );
 
         try {
             $this->ovhResponderManager->upsert($emailAccount, [
