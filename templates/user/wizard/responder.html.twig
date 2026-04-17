@@ -1,0 +1,306 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Assistant absence{% endblock %}
+
+{% block body %}
+    <main id="contenu-principal" class="relative flex min-h-screen w-full items-center justify-center px-6 py-16">
+        <a class="fixed right-6 top-6 z-50 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-800 bg-slate-950/40 text-slate-200 hover:bg-slate-900 hover:text-slate-100" href="{{ path('app_user_account', accountParams) }}" aria-label="Annuler" title="Annuler">
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <path d="M6 6L18 18"></path>
+                <path d="M18 6L6 18"></path>
+            </svg>
+        </a>
+
+        <section class="w-full max-w-[800px]">
+            {% for message in app.flashes('error') %}
+                <div class="mb-6 rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+                    {{ message }}
+                </div>
+            {% endfor %}
+
+            {% if previousStep %}
+                <div class="mx-auto mb-6 flex max-w-lg justify-start">
+                    <a class="ui-button-secondary" href="{{ path('app_user_wizard_step', accountParams|merge({ step: previousStep })) }}">Retour</a>
+                </div>
+            {% endif %}
+
+            {% if step == 'start_date' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Quand pars-tu&nbsp;?</h1>
+                </div>
+
+                <form method="post" action="{{ path('app_user_wizard_step', accountParams|merge({ step: 'start_date' })) }}" class="space-y-4">
+                    <input type="hidden" name="_token" value="{{ csrf_token('submit') }}">
+                    <div class="mx-auto mt-8 max-w-lg space-y-2">
+                        <label class="text-sm font-medium text-slate-200" for="wizard_startsAt">Début</label>
+                        <input id="wizard_startsAt" name="startsAt" type="datetime-local" class="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100" value="{{ data.startsAt ?? '' }}">
+                    </div>
+                    <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                        <button type="submit" class="ui-button-primary px-6 py-3 text-base">Continuer</button>
+                    </div>
+                </form>
+
+            {% elseif step == 'end_date' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Quand reviens-tu&nbsp;?</h1>
+                    <p class="mt-3 text-sm text-slate-400">Renseigne plutôt le jour et l’heure de ton retour.</p>
+                </div>
+
+                <form method="post" action="{{ path('app_user_wizard_step', accountParams|merge({ step: 'end_date' })) }}" class="space-y-4">
+                    <input type="hidden" name="_token" value="{{ csrf_token('submit') }}">
+                    <div class="mx-auto mt-8 max-w-lg space-y-2">
+                        <label class="text-sm font-medium text-slate-200" for="wizard_endsAt">Retour</label>
+                        <input id="wizard_endsAt" name="endsAt" type="datetime-local" class="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100" value="{{ data.endsAt ?? '' }}">
+                    </div>
+                    <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                        <button type="submit" class="ui-button-primary px-6 py-3 text-base">Continuer</button>
+                    </div>
+                </form>
+
+            {% elseif step == 'message' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Quel message souhaites-tu mettre&nbsp;?</h1>
+                </div>
+
+                <form method="post" action="{{ path('app_user_wizard_step', accountParams|merge({ step: 'message' })) }}" class="space-y-4">
+                    <input type="hidden" name="_token" value="{{ csrf_token('submit') }}">
+                    <div class="mx-auto mt-8 max-w-lg space-y-2">
+                        <label class="text-sm font-medium text-slate-200" for="wizard_preset">Message prédéfini</label>
+                        <select id="wizard_preset" class="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100">
+                            <option value="">Choisir un format</option>
+                            {% for key, preset in messagePresets %}
+                                <option value="{{ key }}">{{ preset.label }}</option>
+                            {% endfor %}
+                        </select>
+
+                        <label class="text-sm font-medium text-slate-200" for="wizard_message">Message</label>
+                        <textarea id="wizard_message" name="message" rows="10" required class="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100" placeholder="Bonjour, je suis absent...">{{ data.message ?? '' }}</textarea>
+                        <p class="text-xs text-slate-400">
+                            Variables : <code>{date_debut}</code>, <code>{date_fin}</code>, <code>{telephone_agence}</code>, <code>{prenom_nom}</code>
+                        </p>
+                    </div>
+                    <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                        <button type="submit" class="ui-button-primary px-6 py-3 text-base">Continuer</button>
+                    </div>
+                </form>
+
+            {% elseif step == 'add_redirection' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Souhaites-tu ajouter une redirection&nbsp;?</h1>
+                </div>
+
+                <form method="post" action="{{ path('app_user_wizard_step', accountParams|merge({ step: 'add_redirection' })) }}" class="space-y-4">
+                    <input type="hidden" name="_token" value="{{ csrf_token('submit') }}">
+                    <div class="mx-auto mt-8 grid max-w-lg gap-3">
+                        <label class="flex cursor-pointer items-center justify-between rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-4 text-base text-slate-100">
+                            <span class="font-medium">Non</span>
+                            <input type="radio" name="addRedirection" value="0" {% if (data.addRedirection ?? false) == false %}checked{% endif %}>
+                        </label>
+                        <label class="flex cursor-pointer items-center justify-between rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-4 text-base text-slate-100">
+                            <span class="font-medium">Oui</span>
+                            <input type="radio" name="addRedirection" value="1" {% if (data.addRedirection ?? false) == true %}checked{% endif %}>
+                        </label>
+                    </div>
+                    <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                        <button type="submit" class="ui-button-primary px-6 py-3 text-base">Continuer</button>
+                    </div>
+                </form>
+
+            {% elseif step == 'destination' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Vers qui&nbsp;?</h1>
+                </div>
+
+                <form method="post" action="{{ path('app_user_wizard_step', accountParams|merge({ step: 'destination' })) }}" class="space-y-4">
+                    <input type="hidden" name="_token" value="{{ csrf_token('submit') }}">
+                    <div class="mx-auto mt-8 max-w-lg space-y-2">
+                        <label class="text-sm font-medium text-slate-200" for="wizard_destinationEmail">Destination</label>
+                        <input id="wizard_destinationEmail" type="email" name="destinationEmail" required class="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100" value="{{ data.destinationEmail ?? '' }}" placeholder="prenom.nom@gmail.com">
+                    </div>
+                    <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                        <button type="submit" class="ui-button-primary px-6 py-3 text-base">Continuer</button>
+                    </div>
+                </form>
+
+            {% elseif step == 'same_dates' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Rediriger sur les mêmes dates&nbsp;?</h1>
+                </div>
+
+                <form method="post" action="{{ path('app_user_wizard_step', accountParams|merge({ step: 'same_dates' })) }}" class="space-y-4">
+                    <input type="hidden" name="_token" value="{{ csrf_token('submit') }}">
+                    <div class="mx-auto mt-8 grid max-w-lg gap-3">
+                        <label class="flex cursor-pointer items-center justify-between rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-4 text-base text-slate-100">
+                            <span class="font-medium">Oui</span>
+                            <input type="radio" name="redirectSameDates" value="1" {% if (data.redirectSameDates ?? true) == true %}checked{% endif %}>
+                        </label>
+                        <label class="flex cursor-pointer items-center justify-between rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-4 text-base text-slate-100">
+                            <span class="font-medium">Non</span>
+                            <input type="radio" name="redirectSameDates" value="0" {% if (data.redirectSameDates ?? true) == false %}checked{% endif %}>
+                        </label>
+                    </div>
+                    <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                        <button type="submit" class="ui-button-primary px-6 py-3 text-base">Continuer</button>
+                    </div>
+                </form>
+
+            {% elseif step == 'redirection_dates' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Dates de redirection</h1>
+                </div>
+
+                <form method="post" action="{{ path('app_user_wizard_step', accountParams|merge({ step: 'redirection_dates' })) }}" class="space-y-4">
+                    <input type="hidden" name="_token" value="{{ csrf_token('submit') }}">
+                    <div class="mx-auto mt-8 grid max-w-lg gap-4 sm:grid-cols-2">
+                        <div class="space-y-1">
+                            <label class="text-sm font-medium text-slate-200" for="wizard_redirStarts">Début</label>
+                            <input id="wizard_redirStarts" name="redirectionStartsAt" type="datetime-local" class="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100" value="{{ data.redirectionStartsAt ?? '' }}">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-sm font-medium text-slate-200" for="wizard_redirEnds">Fin</label>
+                            <input id="wizard_redirEnds" name="redirectionEndsAt" type="datetime-local" class="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-100" value="{{ data.redirectionEndsAt ?? '' }}">
+                        </div>
+                    </div>
+                    <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                        <button type="submit" class="ui-button-primary px-6 py-3 text-base">Continuer</button>
+                    </div>
+                </form>
+
+            {% else %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Tout est prêt&nbsp;?</h1>
+                    <p class="mt-3 text-sm text-slate-400">Récapitulatif avant application.</p>
+                </div>
+
+                <div class="mx-auto mt-8 max-w-lg space-y-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-5 text-sm text-slate-200">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-slate-400">Départ</p>
+                            <p class="mt-1 font-semibold text-slate-100">{{ (data.startsAt ?? '') ?: '—' }}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs uppercase tracking-wide text-slate-400">Retour</p>
+                            <p class="mt-1 font-semibold text-slate-100">{{ (data.endsAt ?? '') ?: '—' }}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Message</p>
+                        <pre class="mt-2 whitespace-pre-wrap rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-slate-100">{{ data.message ?? '' }}</pre>
+                    </div>
+
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-slate-400">Redirection</p>
+                            {% if data.addRedirection ?? false %}
+                                <p class="mt-1 font-semibold text-slate-100">Oui</p>
+                                <p class="mt-1 text-slate-200">{{ data.destinationEmail ?? '' }}</p>
+                                <p class="mt-1 text-xs text-slate-400">Copie OVH : activée</p>
+                            {% else %}
+                                <p class="mt-1 font-semibold text-slate-100">Non</p>
+                            {% endif %}
+                        </div>
+                        {% if data.addRedirection ?? false %}
+                            <div class="text-right">
+                                <p class="text-xs uppercase tracking-wide text-slate-400">Période</p>
+                                {% if data.redirectSameDates ?? true %}
+                                    <p class="mt-1 font-semibold text-slate-100">Même dates</p>
+                                {% else %}
+                                    <p class="mt-1 font-semibold text-slate-100">{{ (data.redirectionStartsAt ?? '') ?: '—' }}</p>
+                                    <p class="mt-1 font-semibold text-slate-100">{{ (data.redirectionEndsAt ?? '') ?: '—' }}</p>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <form method="post" action="{{ path('app_user_wizard_apply') }}" class="mx-auto mt-8 flex max-w-lg justify-end gap-2">
+                    <input type="hidden" name="_token" value="{{ csrf_token('submit') }}">
+                    {% if accountParams.accountId is defined %}
+                        <input type="hidden" name="accountId" value="{{ accountParams.accountId }}">
+                    {% endif %}
+                    <button type="submit" class="ui-button-primary px-6 py-3 text-base">Appliquer</button>
+                </form>
+            {% endif %}
+        </section>
+    </main>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const presetSelect = document.getElementById('wizard_preset');
+            const message = document.getElementById('wizard_message');
+            const presets = {{ messagePresets|json_encode|raw }};
+            const agencyPhone = {{ agencyPhone|json_encode|raw }};
+            const startsAtValue = {{ (data.startsAt ?? '')|json_encode|raw }};
+            const endsAtValue = {{ (data.endsAt ?? '')|json_encode|raw }};
+            const ownerDisplayName = {{ ownerDisplayName|json_encode|raw }};
+            if (!presetSelect || !message) {
+                return;
+            }
+
+            const formatDate = (rawValue) => {
+                if (!rawValue) {
+                    return 'date non définie';
+                }
+                const date = new Date(rawValue);
+                if (Number.isNaN(date.getTime())) {
+                    return 'date non définie';
+                }
+                return date.toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                });
+            };
+
+            const applyVariables = (content) => {
+                const fullName = (ownerDisplayName || '').toString().trim() || ' ';
+                return (content || '').toString()
+                    .replaceAll('{date_debut}', formatDate(startsAtValue))
+                    .replaceAll('{date_fin}', formatDate(endsAtValue))
+                    .replaceAll('{telephone_agence}', agencyPhone)
+                    .replaceAll('{prenom_nom}', fullName);
+            };
+
+            const applyPreset = (key) => {
+                const preset = presets[key];
+                if (!preset || !preset.content) {
+                    return;
+                }
+                message.value = applyVariables(preset.content);
+            };
+
+            presetSelect.addEventListener('change', () => applyPreset(presetSelect.value));
+
+            const replaceShortcodesInTextarea = () => {
+                const replaced = applyVariables(message.value);
+                if (replaced !== message.value) {
+                    message.value = replaced;
+                }
+            };
+
+            // Pré-remplissage : si vide, on met le premier preset disponible.
+            const isEmpty = (message.value || '').trim() === '';
+            if (isEmpty) {
+                const firstKey = Object.keys(presets || {})[0];
+                if (firstKey) {
+                    presetSelect.value = firstKey;
+                    applyPreset(firstKey);
+                }
+            } else {
+                replaceShortcodesInTextarea();
+            }
+
+            // Remplace automatiquement les shortcodes saisis/collés.
+            message.addEventListener('input', replaceShortcodesInTextarea);
+            message.addEventListener('change', replaceShortcodesInTextarea);
+            message.addEventListener('blur', replaceShortcodesInTextarea);
+            message.addEventListener('paste', () => setTimeout(replaceShortcodesInTextarea, 0));
+        });
+    </script>
+{% endblock %}
+

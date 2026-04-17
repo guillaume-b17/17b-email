@@ -43,6 +43,8 @@ final class OtpLoginController extends AbstractController
         private readonly RateLimiterFactory $otpVerifyLimiter,
         #[Autowire('%kernel.environment%')]
         private readonly string $appEnvironment,
+        #[Autowire('%env(default::string:EMAIL_LOGIN_ADMIN_CODE)%')]
+        private readonly ?string $adminLoginCode,
         #[Autowire('%env(default::string:EMAIL_LOGIN_DEV_CODE)%')]
         private readonly string $devLoginCode,
     ) {
@@ -65,18 +67,29 @@ final class OtpLoginController extends AbstractController
             $rateLimit = $limiter->consume();
 
             if ($rateLimit->isAccepted() && $this->allowedEmailChecker->isAllowed($email)) {
-                $code = $this->otpCodeManager->generateCode();
-                $challenge = new EmailLoginChallenge(
-                    $email,
-                    $this->otpCodeManager->hashCode($email, $code),
-                    new \DateTimeImmutable('+10 minutes')
-                );
-                $challenge->setRequestIp($request->getClientIp());
-                $challenge->setUserAgent($request->headers->get('User-Agent'));
+                $roles = $this->adminRoleResolver->resolveRoles($email);
+                $isAdmin = \in_array('ROLE_ADMIN', $roles, true);
 
-                $this->entityManager->persist($challenge);
-                $this->entityManager->flush();
-                $this->sendOtpEmail($email, $code);
+                // Pour les admins, on peut éviter l'envoi d'email OTP (limite Brevo) en utilisant un code admin.
+                if ($isAdmin && '' !== trim((string) $this->adminLoginCode)) {
+                    $this->logger->info('Demande OTP: admin, email non envoye (code admin active)', [
+                        'email' => $email,
+                        'ip' => $request->getClientIp(),
+                    ]);
+                } else {
+                    $code = $this->otpCodeManager->generateCode();
+                    $challenge = new EmailLoginChallenge(
+                        $email,
+                        $this->otpCodeManager->hashCode($email, $code),
+                        new \DateTimeImmutable('+10 minutes')
+                    );
+                    $challenge->setRequestIp($request->getClientIp());
+                    $challenge->setUserAgent($request->headers->get('User-Agent'));
+
+                    $this->entityManager->persist($challenge);
+                    $this->entityManager->flush();
+                    $this->sendOtpEmail($email, $code);
+                }
             }
 
             $request->getSession()->set('pending_login_email', $email);
@@ -110,9 +123,57 @@ final class OtpLoginController extends AbstractController
             $rateLimit = $limiter->consume();
             $providedCode = trim((string) $form->get('code')->getData());
 
+            $isAdminBypass = '' !== trim((string) $this->adminLoginCode)
+                && \in_array('ROLE_ADMIN', $this->adminRoleResolver->resolveRoles($email), true)
+                && hash_equals(trim((string) $this->adminLoginCode), $providedCode);
+
             $isDevBypass = \in_array($this->appEnvironment, ['dev', 'test'], true)
                 && '' !== trim($this->devLoginCode)
                 && hash_equals(trim($this->devLoginCode), $providedCode);
+
+            if ($isAdminBypass) {
+                if (!$rateLimit->isAccepted()) {
+                    $this->addFlash('error', 'Code invalide ou expire.');
+
+                    return $this->redirectToRoute('app_auth_verify');
+                }
+
+                if (!$this->allowedEmailChecker->isAllowed($email)) {
+                    $this->addFlash('error', 'Code invalide ou expire.');
+
+                    return $this->redirectToRoute('app_auth_verify');
+                }
+
+                $this->logger->info('Connexion OTP via code admin', [
+                    'email' => $email,
+                    'ip' => $request->getClientIp(),
+                ]);
+
+                /** @var User|null $user */
+                $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
+                if (!$user instanceof User) {
+                    $user = new User($email);
+                    $this->entityManager->persist($user);
+                }
+
+                $user->setRoles($this->adminRoleResolver->resolveRoles($email));
+                $user->setLastLoginAt(new \DateTimeImmutable());
+                $this->entityManager->flush();
+
+                try {
+                    $this->userMailboxSynchronizer->synchronize($user);
+                } catch (\Throwable $exception) {
+                    $this->logger->warning('Synchronisation OVH au login impossible', [
+                        'email' => $user->getEmail(),
+                        'exception' => $exception->getMessage(),
+                    ]);
+                }
+
+                $request->getSession()->remove('pending_login_email');
+                $response = $this->security->login($user, OtpLoginAuthenticator::class, 'main');
+
+                return $this->redirectToRoute('app_user_account', ['sync' => 1, 'syncResponder' => 1, 'autoSync' => 1]);
+            }
 
             if ($isDevBypass) {
                 if (!$rateLimit->isAccepted()) {

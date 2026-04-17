@@ -79,7 +79,8 @@
             Aller au contenu principal
         </a>
 
-        {% if app.user %}
+        {% set hideAppHeader = hideAppHeader is defined and hideAppHeader %}
+        {% if app.user and not hideAppHeader %}
             <header class="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 lg:px-8">
                 <div class="ui-card">
                     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -111,12 +112,14 @@
         <aside id="weather-widget" class="weather-widget hidden" aria-live="polite">
             <span id="weather-icon" class="text-lg leading-none">-</span>
             <span id="weather-temperature" class="font-semibold">--.-</span>
+            <span id="weather-saint" class="weather-saint hidden"></span>
         </aside>
         <script>
             (() => {
                 const widget = document.getElementById('weather-widget');
                 const icon = document.getElementById('weather-icon');
                 const temperature = document.getElementById('weather-temperature');
+                const saint = document.getElementById('weather-saint');
                 if (!widget || !icon || !temperature) {
                     return;
                 }
@@ -163,6 +166,95 @@
                     return { icon: '🌤️', label: 'Météo' };
                 };
 
+                const timeZone = 'Europe/Paris';
+                const resolveMonthDay = () => {
+                    const parts = new Intl.DateTimeFormat('fr-FR', {
+                        month: '2-digit',
+                        day: '2-digit',
+                        timeZone
+                    }).formatToParts(new Date());
+                    const month = parts.find((p) => p.type === 'month')?.value;
+                    const day = parts.find((p) => p.type === 'day')?.value;
+                    return { month, day };
+                };
+
+                const resolveIsoDate = () => {
+                    const parts = new Intl.DateTimeFormat('fr-FR', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        timeZone
+                    }).formatToParts(new Date());
+                    const year = parts.find((p) => p.type === 'year')?.value;
+                    const month = parts.find((p) => p.type === 'month')?.value;
+                    const day = parts.find((p) => p.type === 'day')?.value;
+                    if (!year || !month || !day) return null;
+                    return `${year}-${month}-${day}`;
+                };
+
+                const fetchSaintOfTheDay = async () => {
+                    if (!saint) return null;
+
+                    const isoDate = resolveIsoDate();
+                    if (!isoDate) return null;
+
+                    const cacheKey = `saint_cache_v1:${isoDate}`;
+                    const nowTs = Date.now();
+                    const ttlMs = 24 * 60 * 60 * 1000;
+
+                    try {
+                        const raw = localStorage.getItem(cacheKey);
+                        if (raw) {
+                            const parsed = JSON.parse(raw);
+                            if (parsed && typeof parsed === 'object' && typeof parsed.expiresAt === 'number' && parsed.expiresAt > nowTs) {
+                                const cached = (parsed.value || '').toString().trim();
+                                return cached || null;
+                            }
+                        }
+                    } catch {
+                        // ignore
+                    }
+
+                    const { month, day } = resolveMonthDay();
+                    if (!month || !day) return null;
+
+                    const normalizeSaintLabel = (value) => {
+                        const text = (value || '').toString().trim();
+                        if (!text) return null;
+
+                        // Exemples possibles: "Saint Jean", "Sainte Jeanne d'Arc", "Saints Pierre et Paul"
+                        const match = text.match(/^(saints?|saintes?)\s+(.+?)\s*([(:].*)?$/i);
+                        if (!match) return null;
+
+                        const name = (match[2] || '').trim();
+                        if (!name) return null;
+
+                        // On retire quelques suffixes fréquents ("(évêque)", etc.) + ponctuation finale.
+                        return name.replace(/\s*[-—–]\s*.*$/, '').replace(/[.]+$/, '').trim() || null;
+                    };
+
+                    const url = `https://api.wikimedia.org/feed/v1/wikipedia/fr/onthisday/all/${month}/${day}`;
+                    try {
+                        const res = await fetch(url, { headers: { accept: 'application/json' } });
+                        if (!res.ok) return null;
+                        const payload = await res.json();
+                        const holidays = Array.isArray(payload?.holidays) ? payload.holidays : [];
+                        const saintEntry = holidays.find((h) => normalizeSaintLabel(h?.text));
+                        const saintName = normalizeSaintLabel(saintEntry?.text);
+                        if (!saintName) return null;
+
+                        try {
+                            localStorage.setItem(cacheKey, JSON.stringify({ expiresAt: nowTs + ttlMs, value: saintName }));
+                        } catch {
+                            // ignore
+                        }
+
+                        return saintName;
+                    } catch {
+                        return null;
+                    }
+                };
+
                 const url = 'https://api.open-meteo.com/v1/forecast?latitude=47.2081&longitude=-1.5033&current=temperature_2m,weather_code,is_day&timezone=Europe%2FParis';
 
                 fetch(url)
@@ -187,6 +279,24 @@
                         temperature.textContent = `${roundedTemp}°C`;
                         widget.title = `Saint-Sébastien-sur-Loire : ${weather.label}`;
                         widget.classList.remove('hidden');
+
+                        fetchSaintOfTheDay()
+                            .then((label) => {
+                                if (!saint) return;
+                                if (!label) {
+                                    saint.classList.add('hidden');
+                                    saint.textContent = '';
+                                    return;
+                                }
+                                saint.textContent = label;
+                                saint.title = `Saint du jour : ${label}`;
+                                saint.classList.remove('hidden');
+                            })
+                            .catch(() => {
+                                if (!saint) return;
+                                saint.classList.add('hidden');
+                                saint.textContent = '';
+                            });
                     })
                     .catch(() => {
                         widget.classList.add('hidden');

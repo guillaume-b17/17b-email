@@ -71,6 +71,7 @@ Variables deja preparees dans `.env`:
 
 - `APP_ALLOWED_DOMAINS`
 - `APP_ADMIN_EMAILS`
+- `EMAIL_LOGIN_ADMIN_CODE` (optionnel) : si defini, les admins peuvent se connecter sans envoi d'email OTP (saisie du code admin a l'etape de verification)
 - `OVH_APP_KEY`
 - `OVH_APP_SECRET`
 - `OVH_CONSUMER_KEY`

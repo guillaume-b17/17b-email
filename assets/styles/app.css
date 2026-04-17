@@ -252,6 +252,10 @@ html[data-theme='bw'] {
         @apply fixed bottom-3 left-3 z-50 inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/95 px-3 py-1 text-sm text-slate-100 shadow-md shadow-black/20;
     }
 
+    .weather-saint {
+        @apply text-xs text-slate-300;
+    }
+
     .ui-button-primary::before,
     .ui-button-secondary::before {
         content: "";

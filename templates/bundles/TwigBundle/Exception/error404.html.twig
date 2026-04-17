@@ -1,0 +1,35 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Page introuvable{% endblock %}
+
+{% block body %}
+    {# Page 404 dédiée (TwigBundle override). #}
+    <main id="contenu-principal" class="mx-auto flex min-h-screen w-full items-center justify-center px-6 py-20">
+        <section class="ui-card w-full max-w-2xl space-y-6 text-center">
+            <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/40 text-2xl font-semibold text-slate-100">
+                404
+            </div>
+
+            <header class="space-y-2">
+                <h1 class="text-balance text-3xl font-semibold sm:text-4xl">Page introuvable</h1>
+                <p class="text-sm text-slate-300">
+                    La page demandée n’existe pas, a été déplacée, ou l’adresse est incorrecte.
+                </p>
+            </header>
+
+            <div class="flex flex-col justify-center gap-2 sm:flex-row">
+                {% if app.user %}
+                    <a class="ui-button-primary" href="{{ path('app_user_account') }}">Retour au compte</a>
+                {% else %}
+                    <a class="ui-button-primary" href="{{ path('app_auth_request_home') }}">Aller à l’accueil</a>
+                {% endif %}
+                <button type="button" class="ui-button-secondary" onclick="history.back()">Page précédente</button>
+            </div>
+
+            <p class="text-xs text-slate-500">
+                Si le problème persiste, vérifie l’URL ou reviens au point de départ.
+            </p>
+        </section>
+    </main>
+{% endblock %}
+

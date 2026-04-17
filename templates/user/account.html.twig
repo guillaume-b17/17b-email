@@ -77,7 +77,10 @@
                     <div>
                         <h2 class="text-xl font-semibold">Répondeur</h2>
                     </div>
-                    <a class="ui-button-primary" href="{{ path('app_user_responder_edit', accountParams) }}">Gérer le répondeur</a>
+                    <div class="flex flex-wrap gap-2">
+                        <a class="ui-button-secondary" href="{{ path('app_user_wizard_start', accountParams) }}">Assistant</a>
+                        <a class="ui-button-primary" href="{{ path('app_user_responder_edit', accountParams) }}">Gérer le répondeur</a>
+                    </div>
                 </div>
 
                 {% if responder %}
