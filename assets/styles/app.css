@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Tailwind v4: explicite les fichiers à scanner pour générer les classes utilisées */
+@source "../../templates/**/*.twig";
+@source "../../src/**/*.php";
+@source "../**/*.js";
+
 :root {
     --app-dark-accent: #b45309;
 }

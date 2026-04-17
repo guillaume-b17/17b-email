@@ -212,8 +212,6 @@ final class OvhResponderManager
         $timeZone = new \DateTimeZone(self::APP_TIMEZONE);
         $payload = [
             'content' => $data['message'],
-            'copy' => false,
-            'copyTo' => '',
         ];
 
         if ($data['startsAt'] instanceof \DateTimeImmutable) {
@@ -241,6 +239,9 @@ final class OvhResponderManager
     {
         $payload = $this->buildPutPayload($data);
         $payload['account'] = $this->extractLocalPart($emailAccount);
+        // Le POST accepte copy/copyTo (création). Le PUT peut refuser copy (read-only).
+        $payload['copy'] = false;
+        $payload['copyTo'] = '';
 
         return $payload;
     }

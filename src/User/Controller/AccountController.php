@@ -558,7 +558,12 @@ final class AccountController extends AbstractController
         }
 
         try {
-            $this->ovhRedirectionManager->delete($redirection, $emailAccount);
+            // Si la redirection est programmée (pas encore créée sur OVH), elle n'a pas d'ovhId.
+            // Dans ce cas, on supprime uniquement localement.
+            $ovhId = $redirection->getOvhId();
+            if (null !== $ovhId && '' !== trim($ovhId)) {
+                $this->ovhRedirectionManager->delete($redirection, $emailAccount);
+            }
             $this->entityManager->remove($redirection);
             $this->entityManager->flush();
 
