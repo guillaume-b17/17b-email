@@ -10,7 +10,34 @@
                     <h1 class="text-2xl font-semibold">Comptes e-mail (admin)</h1>
                     <p class="text-sm text-slate-300">Sélectionnez un compte pour gérer son répondeur et ses redirections.</p>
                 </div>
-                <a class="ui-button-primary" href="{{ path('app_admin_accounts', { sync: 1 }) }}">Synchroniser tous les comptes OVH</a>
+                <div class="flex flex-wrap gap-2">
+                    <a class="ui-button-secondary inline-flex items-center gap-2" href="{{ path('app_admin_accounts', { syncResponders: 1 }) }}">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 12h16"></path>
+                            <path d="M12 4v16"></path>
+                        </svg>
+                        Répondeurs OVH
+                    </a>
+                    <a class="ui-button-secondary inline-flex items-center gap-2" href="{{ path('app_admin_accounts', { syncRedirections: 1 }) }}">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 7h14"></path>
+                            <path d="M5 12h10"></path>
+                            <path d="M5 17h6"></path>
+                            <path d="M15 10l4 2-4 2"></path>
+                        </svg>
+                        Redirections OVH
+                    </a>
+                    <a class="ui-button-primary inline-flex items-center gap-2" href="{{ path('app_admin_accounts', { sync: 1 }) }}">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 7.5 12 3l9 4.5"></path>
+                            <path d="M3 7.5V16.5L12 21l9-4.5V7.5"></path>
+                            <path d="M12 12 21 7.5"></path>
+                            <path d="M12 12 3 7.5"></path>
+                            <path d="M12 12v9"></path>
+                        </svg>
+                        Comptes OVH
+                    </a>
+                </div>
             </div>
 
             {% for message in app.flashes('success') %}
@@ -34,22 +61,121 @@
             {% if accounts is empty %}
                 <p class="text-sm text-slate-400">Aucun compte synchronisé.</p>
             {% else %}
+                <div class="mb-4">
+                    <label for="admin-account-search" class="mb-1 block text-sm font-medium text-slate-200">Rechercher un compte</label>
+                    <input
+                        id="admin-account-search"
+                        type="search"
+                        class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 placeholder:text-slate-500"
+                        placeholder="Ex: jeanne.david@izardcom.fr"
+                    >
+                </div>
+
                 <div class="overflow-hidden rounded-lg border border-slate-800">
-                    <table class="min-w-full divide-y divide-slate-800 text-sm">
+                    <table id="admin-accounts-table" class="min-w-full divide-y divide-slate-800 text-sm">
                         <thead class="bg-slate-900/80 text-slate-300">
                             <tr>
-                                <th class="px-3 py-2 text-left font-medium">Compte</th>
-                                <th class="px-3 py-2 text-left font-medium">Propriétaire</th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    <button type="button" class="admin-sort inline-flex items-center gap-1 hover:text-slate-100" data-sort-key="account" data-sort-type="string">
+                                        Compte
+                                        <span aria-hidden="true">↕</span>
+                                    </button>
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    <button type="button" class="admin-sort inline-flex items-center gap-1 hover:text-slate-100" data-sort-key="responder" data-sort-type="number">
+                                        Répondeur
+                                        <span aria-hidden="true">↕</span>
+                                    </button>
+                                </th>
+                                <th class="px-3 py-2 text-left font-medium">
+                                    <button type="button" class="admin-sort inline-flex items-center gap-1 hover:text-slate-100" data-sort-key="redirections" data-sort-type="number">
+                                        Redirections
+                                        <span aria-hidden="true">↕</span>
+                                    </button>
+                                </th>
                                 <th class="px-3 py-2 text-left font-medium">Action</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                        <tbody id="admin-accounts-body" class="divide-y divide-slate-800 bg-slate-950/40">
                             {% for account in accounts %}
-                                <tr>
+                                {% set responder = respondersByAccountId[account.id] ?? null %}
+                                {% set redirectionSummary = redirectionSummaryByAccountId[account.id] ?? { outgoing: 0, incoming: 0, total: 0, selfCopy: 0 } %}
+                                {% set nowTs = 'now'|date('U') %}
+                                {% set startsAtTs = responder and responder.startsAt ? responder.startsAt|date('U') : null %}
+                                {% set endsAtTs = responder and responder.endsAt ? responder.endsAt|date('U') : null %}
+                                {% set responderSort = 0 %}
+                                {% if responder %}
+                                    {% if startsAtTs is not null and startsAtTs > nowTs %}
+                                        {% set responderSort = 2 %}
+                                    {% elseif endsAtTs is not null and endsAtTs < nowTs %}
+                                        {% set responderSort = 1 %}
+                                    {% else %}
+                                        {% set responderSort = 3 %}
+                                    {% endif %}
+                                {% endif %}
+                                <tr
+                                    data-account="{{ account.email|lower }}"
+                                    data-sort-account="{{ account.email|lower }}"
+                                    data-sort-responder="{{ responderSort }}"
+                                    data-sort-redirections="{{ redirectionSummary.total }}"
+                                >
                                     <td class="px-3 py-2 text-slate-100">{{ account.email }}</td>
-                                    <td class="px-3 py-2 text-slate-100">{{ account.owner.email }}</td>
+                                    <td class="px-3 py-2 text-slate-100">
+                                        {% if responder %}
+                                            {% set statusLabel = 'En cours' %}
+                                            {% set statusClasses = 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' %}
+
+                                            {% if startsAtTs is not null and startsAtTs > nowTs %}
+                                                {% set statusLabel = 'À venir' %}
+                                                {% set statusClasses = 'border-sky-500/40 bg-sky-500/10 text-sky-200' %}
+                                            {% elseif endsAtTs is not null and endsAtTs < nowTs %}
+                                                {% set statusLabel = 'Expiré' %}
+                                                {% set statusClasses = 'border-amber-500/40 bg-amber-500/10 text-amber-200' %}
+                                            {% endif %}
+
+                                            {% set tooltip = 'Début: ' ~ (responder.startsAt ? responder.startsAt|date('d/m/Y H:i') : '—') ~ ' | Fin: ' ~ (responder.endsAt ? responder.endsAt|date('d/m/Y H:i') : '—') %}
+                                            <span
+                                                class="inline-flex rounded-full border px-2.5 py-1 text-xs font-medium {{ statusClasses }}"
+                                                title="{{ tooltip }}"
+                                            >
+                                                {{ statusLabel }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-slate-400">Aucun</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-3 py-2 text-slate-100">
+                                        {% set redirectionTooltip = 'Sortantes: ' ~ redirectionSummary.outgoing ~ ' | Entrantes: ' ~ redirectionSummary.incoming %}
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span
+                                                class="inline-flex rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2.5 py-1 text-xs font-medium text-indigo-200"
+                                                title="{{ redirectionTooltip }}"
+                                            >
+                                                {{ redirectionSummary.total }}
+                                            </span>
+
+                                            {% if redirectionSummary.selfCopy > 0 %}
+                                                <span
+                                                    class="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-200"
+                                                    title="Redirections vers le même compte: {{ redirectionSummary.selfCopy }}"
+                                                >
+                                                    CopyTo: {{ redirectionSummary.selfCopy }}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
                                     <td class="px-3 py-2">
-                                        <a class="ui-button-primary" href="{{ path('app_user_account', { accountId: account.id }) }}">Gérer ce compte</a>
+                                        <a
+                                            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 text-slate-200 hover:border-indigo-400 hover:text-indigo-200"
+                                            href="{{ path('app_user_account', { accountId: account.id }) }}"
+                                            title="Gérer ce compte"
+                                            aria-label="Gérer le compte {{ account.email }}"
+                                        >
+                                            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="12" cy="12" r="3"></circle>
+                                                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-.4-1.1 1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.9a2 2 0 0 1 0-4H3a1.7 1.7 0 0 0 1.1-.4 1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.9a2 2 0 0 1 4 0V3a1.7 1.7 0 0 0 .4 1.1 1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1a2 2 0 0 1 0 4H21a1.7 1.7 0 0 0-1.1.4 1.7 1.7 0 0 0-.5.6z"></path>
+                                            </svg>
+                                        </a>
                                     </td>
                                 </tr>
                             {% endfor %}
@@ -59,4 +185,64 @@
             {% endif %}
         </section>
     </main>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tableBody = document.getElementById('admin-accounts-body');
+            const searchInput = document.getElementById('admin-account-search');
+            const sortButtons = Array.from(document.querySelectorAll('.admin-sort'));
+
+            if (!tableBody || !searchInput || sortButtons.length === 0) {
+                return;
+            }
+
+            const rows = Array.from(tableBody.querySelectorAll('tr'));
+            const sortState = { key: 'account', direction: 'asc' };
+
+            const applySearchFilter = () => {
+                const query = (searchInput.value || '').trim().toLowerCase();
+                rows.forEach((row) => {
+                    const account = (row.dataset.account || '').toLowerCase();
+                    row.style.display = account.includes(query) ? '' : 'none';
+                });
+            };
+
+            const sortRows = (key, type) => {
+                sortState.direction = (sortState.key === key && sortState.direction === 'asc') ? 'desc' : 'asc';
+                sortState.key = key;
+
+                const factor = sortState.direction === 'asc' ? 1 : -1;
+                const sorted = [...rows].sort((a, b) => {
+                    const aRaw = a.dataset[`sort${key.charAt(0).toUpperCase()}${key.slice(1)}`] || '';
+                    const bRaw = b.dataset[`sort${key.charAt(0).toUpperCase()}${key.slice(1)}`] || '';
+
+                    if (type === 'number') {
+                        return factor * ((Number(aRaw) || 0) - (Number(bRaw) || 0));
+                    }
+
+                    return factor * aRaw.localeCompare(bRaw, 'fr');
+                });
+
+                sorted.forEach((row) => tableBody.appendChild(row));
+                applySearchFilter();
+            };
+
+            searchInput.addEventListener('input', applySearchFilter);
+            sortButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const key = button.dataset.sortKey;
+                    const type = button.dataset.sortType || 'string';
+                    if (!key) {
+                        return;
+                    }
+                    sortRows(key, type);
+                });
+            });
+
+            sortRows('account', 'string');
+        });
+    </script>
 {% endblock %}

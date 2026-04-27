@@ -29,10 +29,28 @@
                     message: syncError
                 } %}
             {% endif %}
+
+            {% if hasSelfCopyRedirection is defined and hasSelfCopyRedirection %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'warning',
+                    title: 'Redirection locale détectée',
+                    message: 'Une redirection vers votre propre adresse est encore active (copie locale OVH). Vous pouvez la supprimer depuis la gestion des redirections.'
+                } %}
+            {% endif %}
         </section>
 
         {% if emailAccount %}
             <section class="flex flex-col gap-6">
+                <article class="ui-card">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-slate-400">Assistant rapide</p>
+                            <p class="text-sm text-slate-300">Crée ton répondeur en quelques étapes guidées.</p>
+                        </div>
+                        <a class="ui-button-primary" href="{{ path('app_user_wizard_start', accountParams) }}">J'ajoute un répondeur en 4 questions</a>
+                    </div>
+                </article>
+
                 <article class="ui-card" data-tour="card-account">
                 <h2 class="text-xl font-semibold">Informations du compte e-mail</h2>
                 <dl class="grid gap-4 sm:grid-cols-2">
@@ -78,21 +96,42 @@
                         <h2 class="text-xl font-semibold">Répondeur</h2>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <a class="ui-button-secondary" href="{{ path('app_user_wizard_start', accountParams) }}">Assistant</a>
-                        <a class="ui-button-primary" href="{{ path('app_user_responder_edit', accountParams) }}">Gérer le répondeur</a>
+                        <a
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 text-slate-200 hover:border-indigo-400 hover:text-indigo-200"
+                            href="{{ path('app_user_responder_edit', accountParams) }}"
+                            title="Gérer le répondeur"
+                            aria-label="Gérer le répondeur"
+                        >
+                            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 12h16"></path>
+                                <path d="M12 4v16"></path>
+                            </svg>
+                        </a>
                     </div>
                 </div>
 
                 {% if responder %}
+                    {% set nowTs = 'now'|date('U') %}
+                    {% set startsAtTs = responder.startsAt ? responder.startsAt|date('U') : null %}
+                    {% set endsAtTs = responder.endsAt ? responder.endsAt|date('U') : null %}
+                    {% set responderStatusLabel = 'En cours' %}
+                    {% set responderStatusClasses = 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' %}
+
+                    {% if startsAtTs is not null and startsAtTs > nowTs %}
+                        {% set responderStatusLabel = 'À venir' %}
+                        {% set responderStatusClasses = 'border-sky-500/40 bg-sky-500/10 text-sky-200' %}
+                    {% elseif endsAtTs is not null and endsAtTs < nowTs %}
+                        {% set responderStatusLabel = 'Expiré' %}
+                        {% set responderStatusClasses = 'border-amber-500/40 bg-amber-500/10 text-amber-200' %}
+                    {% endif %}
+
                     <dl class="grid gap-4 sm:grid-cols-3">
                         <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
                             <dt class="text-xs uppercase tracking-wide text-slate-400">Statut</dt>
-                            <dd class="mt-1 text-xl font-semibold">
-                                {% if responder.enabled %}
-                                    Actif
-                                {% else %}
-                                    Inactif / expiré
-                                {% endif %}
+                            <dd class="mt-2">
+                                <span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-medium {{ responderStatusClasses }}">
+                                    {{ responderStatusLabel }}
+                                </span>
                             </dd>
                         </div>
                         <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
@@ -130,7 +169,19 @@
                     <div>
                         <h2 class="text-xl font-semibold">Redirections</h2>
                     </div>
-                    <a class="ui-button-primary" href="{{ path('app_user_redirections', accountParams) }}">Gérer les redirections</a>
+                    <a
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 text-slate-200 hover:border-indigo-400 hover:text-indigo-200"
+                        href="{{ path('app_user_redirections', accountParams) }}"
+                        title="Gérer les redirections"
+                        aria-label="Gérer les redirections"
+                    >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 7h14"></path>
+                            <path d="M5 12h10"></path>
+                            <path d="M5 17h6"></path>
+                            <path d="M15 10l4 2-4 2"></path>
+                        </svg>
+                    </a>
                 </div>
                 <dl class="mt-4 grid gap-4 sm:grid-cols-3">
                     <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">

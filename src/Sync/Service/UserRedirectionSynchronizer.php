@@ -28,6 +28,7 @@ final class UserRedirectionSynchronizer
         if (!str_contains($email, '@')) {
             return ['created' => 0, 'updated' => 0, 'removed' => 0];
         }
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Paris'));
 
         [$localPart, $domain] = explode('@', $email, 2);
         $domain = mb_strtolower($domain);
@@ -120,6 +121,10 @@ final class UserRedirectionSynchronizer
                 null === $currentOvhId
                 && $currentRedirection->isScheduled()
                 && $currentRedirection->getSourceEmail() === $email
+                && (
+                    null !== $currentRedirection->getStartsAt()
+                    && $currentRedirection->getStartsAt() > $now
+                )
             ) {
                 continue;
             }

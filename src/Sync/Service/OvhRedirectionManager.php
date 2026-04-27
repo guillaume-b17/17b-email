@@ -70,6 +70,37 @@ final class OvhRedirectionManager
         );
     }
 
+    public function deleteSelfCopyRedirections(EmailAccount $emailAccount): int
+    {
+        [, $domain] = $this->extractLocalPartAndDomain($emailAccount);
+        $sourceEmail = mb_strtolower($emailAccount->getEmail());
+        $ids = $this->fetchRedirectionIds($domain, ['from' => $sourceEmail]);
+
+        $deleted = 0;
+        foreach ($ids as $id) {
+            try {
+                $detail = $this->ovhApiClient->get(
+                    sprintf('/email/domain/%s/redirection/%s', rawurlencode($domain), rawurlencode((string) $id))
+                );
+            } catch (\Throwable) {
+                continue;
+            }
+
+            $from = $this->normalizeEmail((string) ($detail['from'] ?? ''), $domain);
+            $to = $this->normalizeEmail((string) ($detail['to'] ?? ''), $domain);
+            if ($from !== $sourceEmail || $to !== $sourceEmail) {
+                continue;
+            }
+
+            $this->ovhApiClient->delete(
+                sprintf('/email/domain/%s/redirection/%s', rawurlencode($domain), rawurlencode((string) $id))
+            );
+            ++$deleted;
+        }
+
+        return $deleted;
+    }
+
     private function waitForRedirectionId(string $domain, string $sourceEmail, string $destinationEmail): ?string
     {
         for ($attempt = 0; $attempt < 8; ++$attempt) {
@@ -104,6 +135,18 @@ final class OvhRedirectionManager
         }
 
         return null;
+    }
+
+    /**
+     * @param array<string, string> $filters
+     * @return list<string>
+     */
+    private function fetchRedirectionIds(string $domain, array $filters): array
+    {
+        /** @var list<string|int> $ids */
+        $ids = $this->ovhApiClient->get(sprintf('/email/domain/%s/redirection', rawurlencode($domain)), $filters);
+
+        return array_values(array_map(static fn (string|int $id): string => (string) $id, $ids));
     }
 
     /**

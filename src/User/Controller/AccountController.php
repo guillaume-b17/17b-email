@@ -65,6 +65,7 @@ final class AccountController extends AbstractController
             'incoming' => 0,
             'localCopy' => 0,
         ];
+        $hasSelfCopyRedirection = false;
         if ($emailAccount instanceof EmailAccount) {
             /** @var Responder|null $responder */
             $responder = $this->entityManager->getRepository(Responder::class)->findOneBy([
@@ -109,6 +110,14 @@ final class AccountController extends AbstractController
                 if ($redirection->isLocalCopy()) {
                     ++$redirectionSummary['localCopy'];
                 }
+
+                if (
+                    null !== $redirection->getOvhId()
+                    && $redirection->getSourceEmail() === $emailAccount->getEmail()
+                    && $redirection->getDestinationEmail() === $emailAccount->getEmail()
+                ) {
+                    $hasSelfCopyRedirection = true;
+                }
             }
         }
 
@@ -122,6 +131,7 @@ final class AccountController extends AbstractController
             'isAdminContext' => $this->isGranted('ROLE_ADMIN'),
             'agencyPhone' => $this->responderMessagePresetProvider->phoneNumber(),
             'syncError' => $syncError,
+            'hasSelfCopyRedirection' => $hasSelfCopyRedirection,
         ]);
     }
 
@@ -567,6 +577,8 @@ final class AccountController extends AbstractController
             $this->entityManager->remove($redirection);
             $this->entityManager->flush();
 
+            $this->cleanupSelfCopyIfUnused($emailAccount);
+
             $this->addFlash('success', 'Redirection supprimée.');
         } catch (\Throwable $exception) {
             $this->addFlash('error', "Erreur suppression redirection: {$exception->getMessage()}");
@@ -623,6 +635,48 @@ final class AccountController extends AbstractController
         }
 
         return $date;
+    }
+
+    private function cleanupSelfCopyIfUnused(EmailAccount $emailAccount): void
+    {
+        /** @var list<Redirection> $activeOutgoingLocalCopies */
+        $activeOutgoingLocalCopies = $this->entityManager->getRepository(Redirection::class)->findBy([
+            'owner' => $emailAccount->getOwner(),
+            'emailAccount' => $emailAccount,
+            'sourceEmail' => $emailAccount->getEmail(),
+            'localCopy' => true,
+        ]);
+
+        $hasActiveLocalCopyRequirement = false;
+        foreach ($activeOutgoingLocalCopies as $candidate) {
+            if (
+                null !== $candidate->getOvhId()
+                && $candidate->getDestinationEmail() !== $emailAccount->getEmail()
+            ) {
+                $hasActiveLocalCopyRequirement = true;
+                break;
+            }
+        }
+
+        if ($hasActiveLocalCopyRequirement) {
+            return;
+        }
+
+        $this->ovhRedirectionManager->deleteSelfCopyRedirections($emailAccount);
+
+        /** @var list<Redirection> $selfCopies */
+        $selfCopies = $this->entityManager->getRepository(Redirection::class)->findBy([
+            'owner' => $emailAccount->getOwner(),
+            'emailAccount' => $emailAccount,
+            'sourceEmail' => $emailAccount->getEmail(),
+            'destinationEmail' => $emailAccount->getEmail(),
+        ]);
+        foreach ($selfCopies as $selfCopy) {
+            $this->entityManager->remove($selfCopy);
+        }
+        if ([] !== $selfCopies) {
+            $this->entityManager->flush();
+        }
     }
 
     /**

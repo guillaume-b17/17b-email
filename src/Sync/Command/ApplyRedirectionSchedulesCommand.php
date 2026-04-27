@@ -87,6 +87,10 @@ final class ApplyRedirectionSchedulesCommand extends Command
                     $redirection->setEnabled(false);
                     ++$updated;
                 }
+
+                if ($redirection->isLocalCopy()) {
+                    $this->cleanupSelfCopyIfUnused($emailAccount);
+                }
             } catch (\Throwable $exception) {
                 ++$errors;
                 $this->logger->error('Erreur application redirection programmée', [
@@ -117,6 +121,39 @@ final class ApplyRedirectionSchedulesCommand extends Command
         ));
 
         return Command::SUCCESS;
+    }
+
+    private function cleanupSelfCopyIfUnused(\App\Entity\EmailAccount $emailAccount): void
+    {
+        /** @var list<Redirection> $activeOutgoingLocalCopies */
+        $activeOutgoingLocalCopies = $this->entityManager->getRepository(Redirection::class)->findBy([
+            'owner' => $emailAccount->getOwner(),
+            'emailAccount' => $emailAccount,
+            'sourceEmail' => $emailAccount->getEmail(),
+            'localCopy' => true,
+        ]);
+
+        foreach ($activeOutgoingLocalCopies as $candidate) {
+            if (
+                null !== $candidate->getOvhId()
+                && $candidate->getDestinationEmail() !== $emailAccount->getEmail()
+            ) {
+                return;
+            }
+        }
+
+        $this->ovhRedirectionManager->deleteSelfCopyRedirections($emailAccount);
+
+        /** @var list<Redirection> $selfCopies */
+        $selfCopies = $this->entityManager->getRepository(Redirection::class)->findBy([
+            'owner' => $emailAccount->getOwner(),
+            'emailAccount' => $emailAccount,
+            'sourceEmail' => $emailAccount->getEmail(),
+            'destinationEmail' => $emailAccount->getEmail(),
+        ]);
+        foreach ($selfCopies as $selfCopy) {
+            $this->entityManager->remove($selfCopy);
+        }
     }
 }
 
