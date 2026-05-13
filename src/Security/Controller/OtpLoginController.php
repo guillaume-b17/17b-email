@@ -66,12 +66,16 @@ final class OtpLoginController extends AbstractController
             $limiter = $this->otpRequestLimiter->create($email.'|'.$request->getClientIp());
             $rateLimit = $limiter->consume();
 
+            $otpEmailed = false;
+            $adminOtpBypass = false;
+
             if ($rateLimit->isAccepted() && $this->allowedEmailChecker->isAllowed($email)) {
                 $roles = $this->adminRoleResolver->resolveRoles($email);
                 $isAdmin = \in_array('ROLE_ADMIN', $roles, true);
 
                 // Pour les admins, on peut éviter l'envoi d'email OTP (limite Brevo) en utilisant un code admin.
                 if ($isAdmin && '' !== trim((string) $this->adminLoginCode)) {
+                    $adminOtpBypass = true;
                     $this->logger->info('Demande OTP: admin, email non envoye (code admin active)', [
                         'email' => $email,
                         'ip' => $request->getClientIp(),
@@ -98,11 +102,22 @@ final class OtpLoginController extends AbstractController
 
                         return $this->redirectToRoute('app_auth_request');
                     }
+                    $otpEmailed = true;
                 }
             }
 
             $request->getSession()->set('pending_login_email', $email);
-            $this->addFlash('success', 'Si cette adresse est autorisee, un code a ete envoye.');
+
+            if ($adminOtpBypass) {
+                $this->addFlash(
+                    'info',
+                    'Compte administrateur : aucun e-mail n\'a ete envoye (economie d\'envois SMTP). Saisissez le code administrateur sur cette etape, pas un code recu par mail.'
+                );
+            } elseif ($otpEmailed) {
+                $this->addFlash('success', 'Un code de connexion vous a ete envoye par e-mail.');
+            } else {
+                $this->addFlash('success', 'Si cette adresse est autorisee, un code a ete envoye.');
+            }
 
             return $this->redirectToRoute('app_auth_verify');
         }

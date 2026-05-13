@@ -12,6 +12,14 @@
                 </p>
             </header>
 
+            {% for message in app.flashes('info') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'info',
+                    title: 'Connexion administrateur',
+                    message: message
+                } %}
+            {% endfor %}
+
             {% for message in app.flashes('error') %}
                 {% include 'components/ui/alert.html.twig' with {
                     tone: 'danger',
