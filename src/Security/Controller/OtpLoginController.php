@@ -88,7 +88,16 @@ final class OtpLoginController extends AbstractController
 
                     $this->entityManager->persist($challenge);
                     $this->entityManager->flush();
-                    $this->sendOtpEmail($email, $code);
+                    if (!$this->sendOtpEmail($email, $code)) {
+                        $this->entityManager->remove($challenge);
+                        $this->entityManager->flush();
+                        $this->addFlash(
+                            'error',
+                            'L\'envoi du code par e-mail a echoue. Reessayez plus tard ou contactez un administrateur.'
+                        );
+
+                        return $this->redirectToRoute('app_auth_request');
+                    }
                 }
             }
 
@@ -287,7 +296,7 @@ final class OtpLoginController extends AbstractController
         ]);
     }
 
-    private function sendOtpEmail(string $email, string $code): void
+    private function sendOtpEmail(string $email, string $code): bool
     {
         $mail = (new TemplatedEmail())
             ->from(new Address('no-reply@agence-b17.dev', 'OVH Mail Manager'))
@@ -300,11 +309,15 @@ final class OtpLoginController extends AbstractController
 
         try {
             $this->mailer->send($mail);
+
+            return true;
         } catch (\Throwable $exception) {
             $this->logger->error('Echec envoi OTP', [
                 'email' => $email,
                 'exception' => $exception->getMessage(),
             ]);
+
+            return false;
         }
     }
 }

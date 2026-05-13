@@ -12,6 +12,14 @@
                 </p>
             </header>
 
+            {% for message in app.flashes('error') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'danger',
+                    title: 'Envoi impossible',
+                    message: message
+                } %}
+            {% endfor %}
+
             {% for message in app.flashes('success') %}
                 {% include 'components/ui/alert.html.twig' with {
                     tone: 'success',
