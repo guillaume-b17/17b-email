@@ -14,7 +14,13 @@
                         <span class="font-mono">@{{ sourceDomain }}</span>. Les collaborateurs conservent l’ancien compte et ajoutent le nouveau dans leur messagerie.
                     </p>
                 </div>
-                <a class="ui-button-secondary" href="{{ path('app_admin_domain_migration_passwords') }}">Télécharger les mots de passe</a>
+                <div class="flex flex-wrap gap-2">
+                    <form method="post" action="{{ path('app_admin_domain_migration_sync') }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('admin_sync_17b_accounts') }}">
+                        <button type="submit" class="ui-button-primary">Synchroniser @{{ targetDomain }}</button>
+                    </form>
+                    <a class="ui-button-secondary" href="{{ path('app_admin_domain_migration_passwords') }}">Télécharger les mots de passe</a>
+                </div>
             </div>
 
             {% for message in app.flashes('success') %}
@@ -57,7 +63,7 @@
             {% endif %}
 
             {% if targetAccounts is empty %}
-                <p class="text-sm text-slate-400">Aucun compte @{{ targetDomain }} pour le moment.</p>
+                <p class="text-sm text-slate-400">Aucun compte @{{ targetDomain }} en base. Cliquez sur « Synchroniser @{{ targetDomain }} » pour les charger depuis OVH.</p>
             {% else %}
                 <div class="overflow-x-auto rounded-lg border border-slate-800">
                     <table class="min-w-full divide-y divide-slate-800 text-sm">

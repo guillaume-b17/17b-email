@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Admin\Controller;
 
 use App\Entity\MailboxMigration;
+use App\Sync\Service\AdminMailboxSynchronizer;
 use App\Sync\Service\DomainMigrationProvisioner;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -20,6 +21,7 @@ final class AdminDomainMigrationController extends AbstractController
 {
     public function __construct(
         private readonly DomainMigrationProvisioner $domainMigrationProvisioner,
+        private readonly AdminMailboxSynchronizer $adminMailboxSynchronizer,
         #[Autowire('%env(string:APP_MIGRATION_SOURCE_DOMAIN)%')]
         private readonly string $sourceDomain,
         #[Autowire('%env(string:APP_MIGRATION_TARGET_DOMAIN)%')]
@@ -113,6 +115,44 @@ final class AdminDomainMigrationController extends AbstractController
             );
         } else {
             $this->addFlash('success', $detail['message']);
+        }
+
+        return $this->redirectToRoute('app_admin_domain_migration');
+    }
+
+    #[Route('/synchroniser', name: 'app_admin_domain_migration_sync', methods: ['POST'])]
+    public function synchronize(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('admin_sync_17b_accounts', (string) $request->request->get('_token'))) {
+            $this->addFlash('error', 'Session expirée, veuillez réessayer.');
+
+            return $this->redirectToRoute('app_admin_domain_migration');
+        }
+
+        if (\function_exists('set_time_limit')) {
+            @set_time_limit(120);
+        }
+
+        try {
+            $result = $this->adminMailboxSynchronizer->synchronizeDomain($this->targetDomain);
+        } catch (\Throwable $exception) {
+            $this->addFlash('error', sprintf('Synchronisation OVH impossible: %s', $exception->getMessage()));
+
+            return $this->redirectToRoute('app_admin_domain_migration');
+        }
+
+        $this->addFlash(
+            'success',
+            sprintf(
+                'Synchronisation @%s terminée (%d créés, %d mis à jour, %d ignorés).',
+                $this->targetDomain,
+                $result['created'],
+                $result['updated'],
+                $result['skipped']
+            )
+        );
+        foreach ($result['errors'] as $error) {
+            $this->addFlash('error', $error);
         }
 
         return $this->redirectToRoute('app_admin_domain_migration');

@@ -22,6 +22,8 @@ final class AdminMailboxSynchronizer
         private readonly AdminRoleResolver $adminRoleResolver,
         private readonly LoggerInterface $logger,
         private readonly array $allowedDomains,
+        private readonly string $migrationSourceDomain,
+        private readonly string $migrationTargetDomain,
     ) {
     }
 
@@ -35,6 +37,33 @@ final class AdminMailboxSynchronizer
      */
     public function synchronizeAll(): array
     {
+        return $this->synchronizeDomains($this->domainsToSynchronize());
+    }
+
+    /**
+     * @return array{
+     *     created: int,
+     *     updated: int,
+     *     skipped: int,
+     *     errors: list<string>
+     * }
+     */
+    public function synchronizeDomain(string $domain): array
+    {
+        return $this->synchronizeDomains([mb_strtolower(trim($domain))]);
+    }
+
+    /**
+     * @param list<string> $domains
+     * @return array{
+     *     created: int,
+     *     updated: int,
+     *     skipped: int,
+     *     errors: list<string>
+     * }
+     */
+    public function synchronizeDomains(array $domains): array
+    {
         $result = [
             'created' => 0,
             'updated' => 0,
@@ -42,7 +71,12 @@ final class AdminMailboxSynchronizer
             'errors' => [],
         ];
 
-        foreach ($this->normalizedAllowedDomains() as $domain) {
+        foreach ($domains as $domain) {
+            $domain = mb_strtolower(trim($domain));
+            if ('' === $domain) {
+                continue;
+            }
+
             try {
                 $accounts = $this->ovhApiClient->fetchDomainAccounts($domain);
             } catch (\Throwable $exception) {
@@ -54,8 +88,12 @@ final class AdminMailboxSynchronizer
                 continue;
             }
 
+            if ([] === $accounts) {
+                $result['errors'][] = sprintf('Domaine %s: OVH n’a renvoyé aucun compte.', $domain);
+            }
+
             foreach ($accounts as $localPart) {
-                $localPart = trim($localPart);
+                $localPart = trim((string) $localPart);
                 if ('' === $localPart) {
                     ++$result['skipped'];
 
@@ -65,12 +103,9 @@ final class AdminMailboxSynchronizer
                 $email = mb_strtolower(sprintf('%s@%s', $localPart, $domain));
 
                 try {
-                    $remoteAccount = $this->ovhApiClient->fetchEmailAccount($domain, $localPart);
-                    if (null === $remoteAccount) {
-                        ++$result['skipped'];
-
-                        continue;
-                    }
+                    $remoteAccount = $this->ovhApiClient->fetchEmailAccount($domain, $localPart) ?? [
+                        'accountName' => $localPart,
+                    ];
 
                     $owner = $this->upsertOwnerUser($email);
                     $wasCreated = $this->upsertEmailAccount($owner, $email, $domain, $remoteAccount);
@@ -88,7 +123,7 @@ final class AdminMailboxSynchronizer
 
         $this->entityManager->flush();
 
-        $this->logger->info('Synchronisation globale admin terminée', $result);
+        $this->logger->info('Synchronisation admin terminée', $result);
 
         return $result;
     }
@@ -101,6 +136,11 @@ final class AdminMailboxSynchronizer
         ]);
         if ($migration instanceof MailboxMigration) {
             return $migration->getOwner();
+        }
+
+        $sourceOwner = $this->findSourceOwner($email);
+        if ($sourceOwner instanceof User) {
+            return $sourceOwner;
         }
 
         /** @var User|null $owner */
@@ -116,6 +156,37 @@ final class AdminMailboxSynchronizer
         $owner->setRoles($this->adminRoleResolver->resolveRoles($email));
 
         return $owner;
+    }
+
+    private function findSourceOwner(string $email): ?User
+    {
+        if (!str_contains($email, '@')) {
+            return null;
+        }
+
+        [$localPart, $domain] = explode('@', $email, 2);
+        $targetDomain = mb_strtolower(trim($this->migrationTargetDomain));
+        $sourceDomain = mb_strtolower(trim($this->migrationSourceDomain));
+        if ('' === $targetDomain || $domain !== $targetDomain || '' === $sourceDomain) {
+            return null;
+        }
+
+        $sourceEmail = sprintf('%s@%s', $localPart, $sourceDomain);
+
+        /** @var User|null $owner */
+        $owner = $this->entityManager->getRepository(User::class)->findOneBy([
+            'email' => $sourceEmail,
+        ]);
+        if ($owner instanceof User) {
+            return $owner;
+        }
+
+        /** @var EmailAccount|null $sourceAccount */
+        $sourceAccount = $this->entityManager->getRepository(EmailAccount::class)->findOneBy([
+            'email' => $sourceEmail,
+        ]);
+
+        return $sourceAccount instanceof EmailAccount ? $sourceAccount->getOwner() : null;
     }
 
     /**
@@ -190,6 +261,20 @@ final class AdminMailboxSynchronizer
         }
 
         return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function domainsToSynchronize(): array
+    {
+        $domains = $this->normalizedAllowedDomains();
+        $targetDomain = mb_strtolower(trim($this->migrationTargetDomain));
+        if ('' !== $targetDomain && !\in_array($targetDomain, $domains, true)) {
+            $domains[] = $targetDomain;
+        }
+
+        return $domains;
     }
 
     /**

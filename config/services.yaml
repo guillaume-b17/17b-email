@@ -44,6 +44,8 @@ services:
     App\Sync\Service\AdminMailboxSynchronizer:
         arguments:
             $allowedDomains: '%app.allowed_domains%'
+            $migrationSourceDomain: '%env(string:APP_MIGRATION_SOURCE_DOMAIN)%'
+            $migrationTargetDomain: '%env(string:APP_MIGRATION_TARGET_DOMAIN)%'
 
     App\Sync\Service\MailboxPasswordCipher:
         arguments:
