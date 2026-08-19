@@ -15,6 +15,9 @@ final class UserRedirectionSynchronizer
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly OvhApiClient $ovhApiClient,
+        private readonly OvhRedirectionManager $ovhRedirectionManager,
+        private readonly RedirectionScheduleHelper $redirectionScheduleHelper,
+        private readonly RedirectionSelfCopyCleaner $redirectionSelfCopyCleaner,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -50,6 +53,7 @@ final class UserRedirectionSynchronizer
         $touchedOvhIds = [];
         $created = 0;
         $updated = 0;
+        $removed = 0;
 
         foreach ($remoteIds as $remoteId) {
             $payload = $this->fetchRedirectionDetail($domain, (string) $remoteId);
@@ -88,24 +92,94 @@ final class UserRedirectionSynchronizer
                 ]);
             }
 
+            $isNew = false;
             if (!$redirection instanceof Redirection) {
                 $redirection = new Redirection($user, $emailAccount, $source, $destination);
                 $this->entityManager->persist($redirection);
                 ++$created;
-            } else {
-                ++$updated;
+                $isNew = true;
             }
 
+            $preserveLocalCopy = !$isNew && $redirection->isLocalCopy();
+            $preserveStartsAt = !$isNew ? $redirection->getStartsAt() : null;
+            $preserveEndsAt = !$isNew ? $redirection->getEndsAt() : null;
+
             $redirection
-                ->setEnabled(true)
                 ->setOvhId((string) $remoteId)
                 ->setSourceEmail($source)
                 ->setDestinationEmail($destination)
-                ->setLocalCopy((bool) ($payload['localCopy'] ?? false));
+                ->setLocalCopy((bool) ($payload['localCopy'] ?? false) || $preserveLocalCopy);
+
+            if ($preserveStartsAt instanceof \DateTimeImmutable) {
+                $redirection->setStartsAt($preserveStartsAt);
+            }
+            if ($preserveEndsAt instanceof \DateTimeImmutable) {
+                $redirection->setEndsAt($preserveEndsAt);
+            }
+
+            $this->redirectionScheduleHelper->restoreAbsenceDatesFromResponder($redirection, $emailAccount);
+
+            if ($this->redirectionScheduleHelper->isExpired($redirection, $now)) {
+                try {
+                    $this->ovhRedirectionManager->delete($redirection, $emailAccount);
+                } catch (\Throwable $exception) {
+                    $this->logger->warning('Impossible de supprimer une redirection expirée chez OVH', [
+                        'email' => $email,
+                        'ovhId' => $redirection->getOvhId(),
+                        'exception' => $exception->getMessage(),
+                    ]);
+                }
+
+                $hadLocalCopy = $redirection->isLocalCopy();
+                $this->entityManager->remove($redirection);
+                ++$removed;
+                if ($hadLocalCopy) {
+                    $this->redirectionSelfCopyCleaner->cleanupIfUnused($emailAccount);
+                }
+
+                continue;
+            }
+
+            if (!$isNew) {
+                ++$updated;
+            }
+
+            $redirection->setEnabled($this->redirectionScheduleHelper->shouldBeActive($redirection, $now));
         }
 
-        $removed = 0;
         foreach ($currentRedirections as $currentRedirection) {
+            if (!$this->entityManager->contains($currentRedirection)) {
+                continue;
+            }
+
+            $this->redirectionScheduleHelper->restoreAbsenceDatesFromResponder($currentRedirection, $emailAccount);
+
+            if (
+                $currentRedirection->getSourceEmail() === $email
+                && $this->redirectionScheduleHelper->isExpired($currentRedirection, $now)
+            ) {
+                if (null !== $currentRedirection->getOvhId()) {
+                    try {
+                        $this->ovhRedirectionManager->delete($currentRedirection, $emailAccount);
+                    } catch (\Throwable $exception) {
+                        $this->logger->warning('Impossible de supprimer une redirection expirée chez OVH', [
+                            'email' => $email,
+                            'ovhId' => $currentRedirection->getOvhId(),
+                            'exception' => $exception->getMessage(),
+                        ]);
+                    }
+                }
+
+                $hadLocalCopy = $currentRedirection->isLocalCopy();
+                $this->entityManager->remove($currentRedirection);
+                ++$removed;
+                if ($hadLocalCopy) {
+                    $this->redirectionSelfCopyCleaner->cleanupIfUnused($emailAccount);
+                }
+
+                continue;
+            }
+
             $currentOvhId = $currentRedirection->getOvhId();
             if (null !== $currentOvhId && \in_array($currentOvhId, $touchedOvhIds, true)) {
                 continue;

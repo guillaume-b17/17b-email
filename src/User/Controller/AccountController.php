@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\User\Controller;
 
 use App\Entity\EmailAccount;
+use App\Entity\MailboxMigration;
 use App\Entity\Redirection;
 use App\Entity\Responder;
 use App\Entity\User;
+use App\Sync\Service\DomainMigrationProvisioner;
 use App\Sync\Service\OvhRedirectionManager;
 use App\Sync\Service\OvhResponderManager;
+use App\Sync\Service\RedirectionSelfCopyCleaner;
 use App\Sync\Service\UserRedirectionSynchronizer;
 use App\Sync\Service\UserMailboxSynchronizer;
 use App\User\Service\ResponderMessagePresetProvider;
@@ -33,6 +36,8 @@ final class AccountController extends AbstractController
         private readonly OvhRedirectionManager $ovhRedirectionManager,
         private readonly UserRedirectionSynchronizer $userRedirectionSynchronizer,
         private readonly ResponderMessagePresetProvider $responderMessagePresetProvider,
+        private readonly RedirectionSelfCopyCleaner $redirectionSelfCopyCleaner,
+        private readonly DomainMigrationProvisioner $domainMigrationProvisioner,
     ) {
     }
 
@@ -132,6 +137,7 @@ final class AccountController extends AbstractController
             'agencyPhone' => $this->responderMessagePresetProvider->phoneNumber(),
             'syncError' => $syncError,
             'hasSelfCopyRedirection' => $hasSelfCopyRedirection,
+            'mailboxMigration' => $this->resolveMailboxMigration($user, $emailAccount),
         ]);
     }
 
@@ -568,16 +574,12 @@ final class AccountController extends AbstractController
         }
 
         try {
-            // Si la redirection est programmée (pas encore créée sur OVH), elle n'a pas d'ovhId.
-            // Dans ce cas, on supprime uniquement localement.
-            $ovhId = $redirection->getOvhId();
-            if (null !== $ovhId && '' !== trim($ovhId)) {
-                $this->ovhRedirectionManager->delete($redirection, $emailAccount);
-            }
+            // delete() gère aussi le fallback sans ovhId (recherche source/destination chez OVH).
+            $this->ovhRedirectionManager->delete($redirection, $emailAccount);
             $this->entityManager->remove($redirection);
             $this->entityManager->flush();
 
-            $this->cleanupSelfCopyIfUnused($emailAccount);
+            $this->redirectionSelfCopyCleaner->cleanupIfUnused($emailAccount);
 
             $this->addFlash('success', 'Redirection supprimée.');
         } catch (\Throwable $exception) {
@@ -604,6 +606,17 @@ final class AccountController extends AbstractController
         ]);
 
         return $emailAccount;
+    }
+
+    private function resolveMailboxMigration(User $user, ?EmailAccount $emailAccount): ?MailboxMigration
+    {
+        $sourceEmail = $emailAccount instanceof EmailAccount ? $emailAccount->getEmail() : $user->getEmail();
+        $migration = $this->domainMigrationProvisioner->findForEmail($sourceEmail);
+        if ($migration instanceof MailboxMigration) {
+            return $migration;
+        }
+
+        return $this->domainMigrationProvisioner->findForEmail($user->getEmail());
     }
 
     /**
@@ -635,48 +648,6 @@ final class AccountController extends AbstractController
         }
 
         return $date;
-    }
-
-    private function cleanupSelfCopyIfUnused(EmailAccount $emailAccount): void
-    {
-        /** @var list<Redirection> $activeOutgoingLocalCopies */
-        $activeOutgoingLocalCopies = $this->entityManager->getRepository(Redirection::class)->findBy([
-            'owner' => $emailAccount->getOwner(),
-            'emailAccount' => $emailAccount,
-            'sourceEmail' => $emailAccount->getEmail(),
-            'localCopy' => true,
-        ]);
-
-        $hasActiveLocalCopyRequirement = false;
-        foreach ($activeOutgoingLocalCopies as $candidate) {
-            if (
-                null !== $candidate->getOvhId()
-                && $candidate->getDestinationEmail() !== $emailAccount->getEmail()
-            ) {
-                $hasActiveLocalCopyRequirement = true;
-                break;
-            }
-        }
-
-        if ($hasActiveLocalCopyRequirement) {
-            return;
-        }
-
-        $this->ovhRedirectionManager->deleteSelfCopyRedirections($emailAccount);
-
-        /** @var list<Redirection> $selfCopies */
-        $selfCopies = $this->entityManager->getRepository(Redirection::class)->findBy([
-            'owner' => $emailAccount->getOwner(),
-            'emailAccount' => $emailAccount,
-            'sourceEmail' => $emailAccount->getEmail(),
-            'destinationEmail' => $emailAccount->getEmail(),
-        ]);
-        foreach ($selfCopies as $selfCopy) {
-            $this->entityManager->remove($selfCopy);
-        }
-        if ([] !== $selfCopies) {
-            $this->entityManager->flush();
-        }
     }
 
     /**

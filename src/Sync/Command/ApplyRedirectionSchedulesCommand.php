@@ -6,6 +6,8 @@ namespace App\Sync\Command;
 
 use App\Entity\Redirection;
 use App\Sync\Service\OvhRedirectionManager;
+use App\Sync\Service\RedirectionScheduleHelper;
+use App\Sync\Service\RedirectionSelfCopyCleaner;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -24,6 +26,8 @@ final class ApplyRedirectionSchedulesCommand extends Command
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly OvhRedirectionManager $ovhRedirectionManager,
+        private readonly RedirectionScheduleHelper $redirectionScheduleHelper,
+        private readonly RedirectionSelfCopyCleaner $redirectionSelfCopyCleaner,
         private readonly LoggerInterface $logger,
     ) {
         parent::__construct();
@@ -36,7 +40,7 @@ final class ApplyRedirectionSchedulesCommand extends Command
         $qb = $this->entityManager->getRepository(Redirection::class)->createQueryBuilder('r');
         /** @var list<Redirection> $redirections */
         $redirections = $qb
-            ->andWhere('r.startsAt IS NOT NULL OR r.endsAt IS NOT NULL')
+            ->andWhere('r.startsAt IS NOT NULL OR r.endsAt IS NOT NULL OR r.sourceEmail <> r.destinationEmail')
             ->getQuery()
             ->getResult();
 
@@ -53,12 +57,13 @@ final class ApplyRedirectionSchedulesCommand extends Command
                 continue;
             }
 
-            $startsAt = $redirection->getStartsAt();
-            $endsAt = $redirection->getEndsAt();
-            $shouldBeActive = (null === $startsAt || $startsAt <= $now) && (null === $endsAt || $endsAt > $now);
+            $this->redirectionScheduleHelper->restoreAbsenceDatesFromResponder($redirection, $emailAccount);
+            if (!$redirection->isScheduled() && null === $redirection->getOvhId()) {
+                continue;
+            }
 
             try {
-                if ($shouldBeActive) {
+                if ($this->redirectionScheduleHelper->shouldBeActive($redirection, $now)) {
                     if (null === $redirection->getOvhId()) {
                         $ovhId = $this->ovhRedirectionManager->create(
                             $emailAccount,
@@ -77,19 +82,31 @@ final class ApplyRedirectionSchedulesCommand extends Command
                     continue;
                 }
 
-                if (null !== $redirection->getOvhId()) {
-                    $this->ovhRedirectionManager->delete($redirection, $emailAccount);
-                    $redirection
-                        ->setOvhId(null)
-                        ->setEnabled(false);
-                    ++$deleted;
-                } elseif ($redirection->isEnabled()) {
-                    $redirection->setEnabled(false);
-                    ++$updated;
+                if ($this->redirectionScheduleHelper->isAwaitingStart($redirection, $now)) {
+                    if (null !== $redirection->getOvhId()) {
+                        $this->ovhRedirectionManager->delete($redirection, $emailAccount);
+                        $redirection
+                            ->setOvhId(null)
+                            ->setEnabled(false);
+                        ++$updated;
+                    } elseif ($redirection->isEnabled()) {
+                        $redirection->setEnabled(false);
+                        ++$updated;
+                    }
+
+                    continue;
                 }
 
-                if ($redirection->isLocalCopy()) {
-                    $this->cleanupSelfCopyIfUnused($emailAccount);
+                $destinationEmail = $redirection->getDestinationEmail();
+                $this->ovhRedirectionManager->delete($redirection, $emailAccount);
+
+                $this->entityManager->remove($redirection);
+                ++$deleted;
+
+                // Toujours tenter le nettoyage de la copie locale (source==destination),
+                // même si le flag localCopy a été perdu en base.
+                if ($destinationEmail !== $emailAccount->getEmail()) {
+                    $this->redirectionSelfCopyCleaner->cleanupIfUnused($emailAccount);
                 }
             } catch (\Throwable $exception) {
                 ++$errors;
@@ -122,38 +139,4 @@ final class ApplyRedirectionSchedulesCommand extends Command
 
         return Command::SUCCESS;
     }
-
-    private function cleanupSelfCopyIfUnused(\App\Entity\EmailAccount $emailAccount): void
-    {
-        /** @var list<Redirection> $activeOutgoingLocalCopies */
-        $activeOutgoingLocalCopies = $this->entityManager->getRepository(Redirection::class)->findBy([
-            'owner' => $emailAccount->getOwner(),
-            'emailAccount' => $emailAccount,
-            'sourceEmail' => $emailAccount->getEmail(),
-            'localCopy' => true,
-        ]);
-
-        foreach ($activeOutgoingLocalCopies as $candidate) {
-            if (
-                null !== $candidate->getOvhId()
-                && $candidate->getDestinationEmail() !== $emailAccount->getEmail()
-            ) {
-                return;
-            }
-        }
-
-        $this->ovhRedirectionManager->deleteSelfCopyRedirections($emailAccount);
-
-        /** @var list<Redirection> $selfCopies */
-        $selfCopies = $this->entityManager->getRepository(Redirection::class)->findBy([
-            'owner' => $emailAccount->getOwner(),
-            'emailAccount' => $emailAccount,
-            'sourceEmail' => $emailAccount->getEmail(),
-            'destinationEmail' => $emailAccount->getEmail(),
-        ]);
-        foreach ($selfCopies as $selfCopy) {
-            $this->entityManager->remove($selfCopy);
-        }
-    }
 }
-

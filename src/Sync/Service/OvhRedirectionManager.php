@@ -59,15 +59,54 @@ final class OvhRedirectionManager
     public function delete(Redirection $redirection, EmailAccount $emailAccount): void
     {
         $ovhId = $redirection->getOvhId();
-        if (null === $ovhId || '' === trim($ovhId)) {
-            throw new \RuntimeException('Cette redirection ne possède pas d’identifiant OVH.');
+        if (null !== $ovhId && '' !== trim($ovhId)) {
+            [, $domain] = $this->extractLocalPartAndDomain($emailAccount);
+
+            $this->ovhApiClient->delete(
+                sprintf('/email/domain/%s/redirection/%s', rawurlencode($domain), rawurlencode($ovhId))
+            );
+
+            return;
         }
 
-        [, $domain] = $this->extractLocalPartAndDomain($emailAccount);
-
-        $this->ovhApiClient->delete(
-            sprintf('/email/domain/%s/redirection/%s', rawurlencode($domain), rawurlencode($ovhId))
+        // Fallback si l'ovhId local a été perdu : retrouver et supprimer chez OVH.
+        $this->deleteBySourceAndDestination(
+            $emailAccount,
+            $redirection->getSourceEmail(),
+            $redirection->getDestinationEmail()
         );
+    }
+
+    public function deleteBySourceAndDestination(EmailAccount $emailAccount, string $sourceEmail, string $destinationEmail): int
+    {
+        [, $domain] = $this->extractLocalPartAndDomain($emailAccount);
+        $sourceEmail = mb_strtolower(trim($sourceEmail));
+        $destinationEmail = mb_strtolower(trim($destinationEmail));
+        $ids = $this->fetchRedirectionIds($domain, ['from' => $sourceEmail]);
+
+        $deleted = 0;
+        foreach ($ids as $id) {
+            try {
+                $detail = $this->ovhApiClient->get(
+                    sprintf('/email/domain/%s/redirection/%s', rawurlencode($domain), rawurlencode((string) $id))
+                );
+            } catch (\Throwable) {
+                continue;
+            }
+
+            $from = $this->normalizeEmail((string) ($detail['from'] ?? ''), $domain);
+            $to = $this->normalizeEmail((string) ($detail['to'] ?? ''), $domain);
+            if ($from !== $sourceEmail || $to !== $destinationEmail) {
+                continue;
+            }
+
+            $this->ovhApiClient->delete(
+                sprintf('/email/domain/%s/redirection/%s', rawurlencode($domain), rawurlencode((string) $id))
+            );
+            ++$deleted;
+        }
+
+        return $deleted;
     }
 
     public function deleteSelfCopyRedirections(EmailAccount $emailAccount): int

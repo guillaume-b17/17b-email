@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Sync\Service;
 
 use App\Entity\EmailAccount;
+use App\Entity\MailboxMigration;
 use App\Entity\User;
 use App\Security\Service\AdminRoleResolver;
 use Doctrine\ORM\EntityManagerInterface;
@@ -94,6 +95,14 @@ final class AdminMailboxSynchronizer
 
     private function upsertOwnerUser(string $email): User
     {
+        /** @var MailboxMigration|null $migration */
+        $migration = $this->entityManager->getRepository(MailboxMigration::class)->findOneBy([
+            'targetEmail' => $email,
+        ]);
+        if ($migration instanceof MailboxMigration) {
+            return $migration->getOwner();
+        }
+
         /** @var User|null $owner */
         $owner = $this->entityManager->getRepository(User::class)->findOneBy([
             'email' => $email,

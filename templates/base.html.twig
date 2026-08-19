@@ -92,8 +92,10 @@
                             {% set accountParams = is_granted('ROLE_ADMIN') and currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : {} %}
                             {% if is_granted('ROLE_ADMIN') %}
                                 <a class="ui-button-secondary" href="{{ path('app_admin_accounts') }}">Comptes (admin)</a>
+                                <a class="ui-button-secondary" href="{{ path('app_admin_domain_migration') }}">Créer comptes 17b.fr</a>
                             {% endif %}
                             <a class="ui-button-secondary" href="{{ path('app_user_account', accountParams) }}">Compte</a>
+                            <a class="ui-button-secondary" href="{{ path('app_user_mailbox_setup', accountParams) }}">Compte 17b.fr</a>
                             <a class="ui-button-secondary" href="{{ path('app_user_responder_edit', accountParams) }}">Répondeur</a>
                             <a class="ui-button-secondary" href="{{ path('app_user_redirections', accountParams) }}">Redirections</a>
                             <form method="post" action="{{ path('_logout_main') }}">

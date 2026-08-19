@@ -1,0 +1,4 @@
+source_email,target_local_part,description
+# Conservez le même identifiant, ou changez-le si le collaborateur change de nom.
+jean.dupont@b17.fr,jean.dupont,Jean Dupont
+marie.ancienne@b17.fr,marie.nouvelle,Marie Nouvelle

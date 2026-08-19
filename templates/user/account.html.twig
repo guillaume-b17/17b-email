@@ -37,6 +37,14 @@
                     message: 'Une redirection vers votre propre adresse est encore active (copie locale OVH). Vous pouvez la supprimer depuis la gestion des redirections.'
                 } %}
             {% endif %}
+
+            {% if mailboxMigration is defined and mailboxMigration %}
+                <article class="rounded-lg border border-indigo-500/40 bg-indigo-500/10 p-4">
+                    <p class="text-sm font-semibold text-indigo-100">Nouveau compte {{ mailboxMigration.targetEmail }}</p>
+                    <p class="mt-1 text-sm text-slate-300">Votre adresse @b17.fr reste active. Ajoutez le compte 17b.fr dans Outlook, Apple Mail ou Thunderbird.</p>
+                    <a class="ui-button-primary mt-3 inline-flex" href="{{ path('app_user_mailbox_setup', accountParams) }}">Configurer ma messagerie</a>
+                </article>
+            {% endif %}
         </section>
 
         {% if emailAccount %}

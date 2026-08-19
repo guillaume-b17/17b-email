@@ -45,5 +45,16 @@ services:
         arguments:
             $allowedDomains: '%app.allowed_domains%'
 
+    App\Sync\Service\MailboxPasswordCipher:
+        arguments:
+            $appSecret: '%kernel.secret%'
+
+    App\Sync\Service\MailClientSettings:
+        arguments:
+            $imapHost: '%env(string:MAIL_IMAP_HOST)%'
+            $imapPort: '%env(int:MAIL_IMAP_PORT)%'
+            $smtpHost: '%env(string:MAIL_SMTP_HOST)%'
+            $smtpPort: '%env(int:MAIL_SMTP_PORT)%'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

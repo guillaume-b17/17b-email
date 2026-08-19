@@ -36,34 +36,42 @@ final class OvhResponderManager
      */
     public function upsert(EmailAccount $emailAccount, array $data): void
     {
+        $existing = $this->fetchWithDiagnostics($emailAccount);
+        if ($existing['found'] && !$this->extractCopy($existing['raw'] ?? [])) {
+            $this->delete($emailAccount);
+            $existing['found'] = false;
+        }
+
         $accountPathCandidates = $this->responderAccountPaths($emailAccount);
         $collectionPathCandidates = $this->responderCollectionPaths($emailAccount);
         $putPayload = $this->buildPutPayload($data);
         $postPayload = $this->buildPostPayload($emailAccount, $data);
         $errors = [];
-        $putNotFound = false;
+        $putNotFound = !$existing['found'];
 
-        foreach ($accountPathCandidates as $path) {
-            try {
-                $this->ovhApiClient->put($path, $putPayload);
+        if ($existing['found']) {
+            foreach ($accountPathCandidates as $path) {
+                try {
+                    $this->ovhApiClient->put($path, $putPayload);
 
-                return;
-            } catch (\Throwable $putException) {
-                $errors[] = sprintf('PUT %s: %s', $path, $putException->getMessage());
-                if ($this->looksLikeNotFound($putException)) {
-                    $putNotFound = true;
-                    continue;
+                    return;
+                } catch (\Throwable $putException) {
+                    $errors[] = sprintf('PUT %s: %s', $path, $putException->getMessage());
+                    if ($this->looksLikeNotFound($putException)) {
+                        $putNotFound = true;
+                        continue;
+                    }
+
+                    if ($this->looksLikeProcessingConflict($putException)) {
+                        throw new \RuntimeException(
+                            "Impossible d'enregistrer le répondeur OVH : OVH est déjà en train de traiter ce répondeur. Réessayez dans quelques instants.\n".implode("\n", $errors),
+                            0,
+                            $putException
+                        );
+                    }
+
+                    throw new \RuntimeException("Impossible d'enregistrer le répondeur OVH.\n".implode("\n", $errors), 0, $putException);
                 }
-
-                if ($this->looksLikeProcessingConflict($putException)) {
-                    throw new \RuntimeException(
-                        "Impossible d'enregistrer le répondeur OVH : OVH est déjà en train de traiter ce répondeur. Réessayez dans quelques instants.\n".implode("\n", $errors),
-                        0,
-                        $putException
-                    );
-                }
-
-                throw new \RuntimeException("Impossible d'enregistrer le répondeur OVH.\n".implode("\n", $errors), 0, $putException);
             }
         }
 
@@ -239,8 +247,9 @@ final class OvhResponderManager
     {
         $payload = $this->buildPutPayload($data);
         $payload['account'] = $this->extractLocalPart($emailAccount);
-        // Le POST accepte copy/copyTo (création). Le PUT peut refuser copy (read-only).
-        $payload['copy'] = false;
+        // copy=true : conserver les mails sur la boîte (copyTo vide = boîte du compte).
+        // copy=false ferait supprimer les mails entrants par OVH.
+        $payload['copy'] = true;
         $payload['copyTo'] = '';
 
         return $payload;
@@ -333,6 +342,18 @@ final class OvhResponderManager
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function extractCopy(array $payload): bool
+    {
+        if (isset($payload['copy'])) {
+            return (bool) $payload['copy'];
+        }
+
+        return true;
     }
 
     private function extractLocalPart(EmailAccount $emailAccount): string

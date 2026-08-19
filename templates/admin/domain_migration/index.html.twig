@@ -1,0 +1,224 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Créer les comptes 17b.fr{% endblock %}
+
+{% block body %}
+    <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
+        <section class="ui-card space-y-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h1 class="text-2xl font-semibold">Créer les comptes @{{ targetDomain }}</h1>
+                    <p class="mt-2 text-sm text-slate-300">
+                        Ce site sert à gérer les répondeurs et redirections. En tant qu’admin, vous créez ici les nouvelles boîtes
+                        <span class="font-mono">@{{ targetDomain }}</span> à partir des comptes
+                        <span class="font-mono">@{{ sourceDomain }}</span>. Les collaborateurs conservent l’ancien compte et ajoutent le nouveau dans leur messagerie.
+                    </p>
+                </div>
+                <a class="ui-button-secondary" href="{{ path('app_admin_domain_migration_passwords') }}">Télécharger les mots de passe</a>
+            </div>
+
+            {% for message in app.flashes('success') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'success',
+                    title: 'Succès',
+                    message: message
+                } %}
+            {% endfor %}
+
+            {% for message in app.flashes('error') %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'danger',
+                    title: 'Erreur',
+                    message: message
+                } %}
+            {% endfor %}
+        </section>
+
+        <section class="ui-card space-y-4">
+            <h2 class="text-xl font-semibold">Créer un compte à la volée</h2>
+            <p class="text-sm text-slate-300">Choisissez un compte @{{ sourceDomain }}, éventuellement un nouvel identifiant si le collaborateur change de nom, puis créez la boîte chez OVH.</p>
+
+            <form method="post" action="{{ path('app_admin_domain_migration_create') }}" class="grid gap-3 lg:grid-cols-12 lg:items-end">
+                <input type="hidden" name="_token" value="{{ csrf_token('admin_create_17b_account') }}">
+
+                <label class="block text-sm lg:col-span-4">
+                    <span class="mb-1 block text-slate-200">Compte source @{{ sourceDomain }}</span>
+                    <select id="source-email" name="sourceEmail" required class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
+                        <option value="">Choisir un compte</option>
+                        {% for row in rows %}
+                            <option
+                                value="{{ row.sourceEmail }}"
+                                data-local-part="{{ row.suggestedLocalPart }}"
+                                data-description="{{ row.description|default('') }}"
+                            >{{ row.sourceEmail }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label class="block text-sm lg:col-span-3">
+                    <span class="mb-1 block text-slate-200">Nouvel identifiant @{{ targetDomain }}</span>
+                    <div class="flex items-center gap-2">
+                        <input id="target-local-part" type="text" name="targetLocalPart" required placeholder="prenom.nom" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-slate-100">
+                        <span class="hidden shrink-0 text-slate-400 sm:inline">@{{ targetDomain }}</span>
+                    </div>
+                </label>
+
+                <label class="block text-sm lg:col-span-3">
+                    <span class="mb-1 block text-slate-200">Nom affiché (optionnel)</span>
+                    <input id="description" type="text" name="description" maxlength="180" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
+                </label>
+
+                <div class="flex flex-col gap-2 lg:col-span-2">
+                    <label class="flex items-center gap-2 text-sm text-slate-300">
+                        <input type="checkbox" name="force" value="1" class="rounded border-slate-600 bg-slate-900">
+                        Réinitialiser le mot de passe
+                    </label>
+                    <button type="submit" class="ui-button-primary">Créer le compte</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="ui-card space-y-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 class="text-xl font-semibold">Comptes @{{ sourceDomain }}</h2>
+                <input
+                    id="migration-search"
+                    type="search"
+                    class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 placeholder:text-slate-500 sm:max-w-xs"
+                    placeholder="Rechercher un compte"
+                >
+            </div>
+
+            {% if rows is empty %}
+                <p class="text-sm text-slate-400">Aucun compte source. Synchronisez d’abord les comptes OVH depuis la page admin.</p>
+            {% else %}
+                <div class="overflow-x-auto rounded-lg border border-slate-800">
+                    <table class="min-w-full divide-y divide-slate-800 text-sm">
+                        <thead class="bg-slate-900/80 text-slate-300">
+                            <tr>
+                                <th class="px-3 py-2 text-left font-medium">Compte actuel</th>
+                                <th class="px-3 py-2 text-left font-medium">Nouveau compte</th>
+                                <th class="px-3 py-2 text-left font-medium">Statut</th>
+                                <th class="px-3 py-2 text-left font-medium">Mot de passe</th>
+                                <th class="px-3 py-2 text-left font-medium">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="migration-rows" class="divide-y divide-slate-800 bg-slate-950/40">
+                            {% for row in rows %}
+                                {% set migration = row.migration %}
+                                <tr data-search="{{ row.sourceEmail|lower }} {{ row.suggestedLocalPart|lower }}">
+                                    <td class="px-3 py-2 text-slate-100">{{ row.sourceEmail }}</td>
+                                    <td class="px-3 py-2 font-mono text-slate-100">{{ row.suggestedLocalPart }}@{{ targetDomain }}</td>
+                                    <td class="px-3 py-2">
+                                        {% if migration is null %}
+                                            <span class="inline-flex rounded-full border border-slate-600 bg-slate-800/60 px-2.5 py-1 text-xs text-slate-300">À créer</span>
+                                        {% elseif migration.status == 'created' %}
+                                            <span class="inline-flex rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200">Créé</span>
+                                        {% elseif migration.status == 'skipped' %}
+                                            <span class="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-200">Déjà chez OVH</span>
+                                        {% else %}
+                                            <span class="inline-flex rounded-full border border-rose-500/40 bg-rose-500/10 px-2.5 py-1 text-xs text-rose-200" title="{{ migration.lastError }}">Erreur</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        {% if row.password %}
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <input type="password" readonly value="{{ row.password }}" class="js-password w-40 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100">
+                                                <button type="button" class="ui-button-secondary js-toggle-password px-2 py-1 text-xs">Afficher</button>
+                                                <button type="button" class="ui-button-primary js-copy-password px-2 py-1 text-xs">Copier</button>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-slate-500">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        <form method="post" action="{{ path('app_admin_domain_migration_create') }}" class="flex flex-wrap items-center gap-2">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('admin_create_17b_account') }}">
+                                            <input type="hidden" name="sourceEmail" value="{{ row.sourceEmail }}">
+                                            <input type="hidden" name="targetLocalPart" value="{{ row.suggestedLocalPart }}">
+                                            <input type="hidden" name="description" value="{{ row.description|default('') }}">
+                                            {% if migration and migration.status == 'created' %}
+                                                <input type="hidden" name="force" value="1">
+                                                <button type="submit" class="ui-button-secondary text-xs" onclick="return confirm('Réinitialiser le mot de passe de {{ row.suggestedLocalPart }}@{{ targetDomain }} ?');">Nouveau mot de passe</button>
+                                            {% elseif migration and migration.status == 'skipped' %}
+                                                <input type="hidden" name="force" value="1">
+                                                <button type="submit" class="ui-button-primary text-xs">Créer le mot de passe</button>
+                                            {% else %}
+                                                <button type="submit" class="ui-button-primary text-xs">Créer</button>
+                                            {% endif %}
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const sourceSelect = document.getElementById('source-email');
+            const targetInput = document.getElementById('target-local-part');
+            const descriptionInput = document.getElementById('description');
+            const searchInput = document.getElementById('migration-search');
+            const rows = Array.from(document.querySelectorAll('#migration-rows tr'));
+
+            if (sourceSelect && targetInput && descriptionInput) {
+                sourceSelect.addEventListener('change', () => {
+                    const option = sourceSelect.selectedOptions[0];
+                    if (!option) {
+                        return;
+                    }
+                    targetInput.value = option.dataset.localPart || '';
+                    descriptionInput.value = option.dataset.description || '';
+                });
+            }
+
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    const query = (searchInput.value || '').trim().toLowerCase();
+                    rows.forEach((row) => {
+                        const haystack = (row.dataset.search || '').toLowerCase();
+                        row.style.display = haystack.includes(query) ? '' : 'none';
+                    });
+                });
+            }
+
+            document.querySelectorAll('.js-toggle-password').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const input = button.parentElement?.querySelector('.js-password');
+                    if (!input) {
+                        return;
+                    }
+                    const hidden = input.type === 'password';
+                    input.type = hidden ? 'text' : 'password';
+                    button.textContent = hidden ? 'Masquer' : 'Afficher';
+                });
+            });
+
+            document.querySelectorAll('.js-copy-password').forEach((button) => {
+                button.addEventListener('click', async () => {
+                    const input = button.parentElement?.querySelector('.js-password');
+                    if (!input) {
+                        return;
+                    }
+                    try {
+                        await navigator.clipboard.writeText(input.value);
+                        button.textContent = 'Copié';
+                        setTimeout(() => {
+                            button.textContent = 'Copier';
+                        }, 1500);
+                    } catch {
+                        input.select();
+                        document.execCommand('copy');
+                    }
+                });
+            });
+        });
+    </script>
+{% endblock %}
