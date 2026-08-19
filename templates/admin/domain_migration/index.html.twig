@@ -35,6 +35,76 @@
         </section>
 
         <section class="ui-card space-y-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold">Comptes @{{ targetDomain }} existants</h2>
+                    <p class="text-sm text-slate-300">{{ targetAccounts|length }} compte{% if targetAccounts|length > 1 %}s{% endif %} trouvé{% if targetAccounts|length > 1 %}s{% endif %} (OVH + application).</p>
+                </div>
+                <input
+                    id="target-search"
+                    type="search"
+                    class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100 placeholder:text-slate-500 sm:max-w-xs"
+                    placeholder="Rechercher un compte 17b.fr"
+                >
+            </div>
+
+            {% if targetAccountsError %}
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'warning',
+                    title: 'Lecture OVH incomplète',
+                    message: targetAccountsError
+                } %}
+            {% endif %}
+
+            {% if targetAccounts is empty %}
+                <p class="text-sm text-slate-400">Aucun compte @{{ targetDomain }} pour le moment.</p>
+            {% else %}
+                <div class="overflow-x-auto rounded-lg border border-slate-800">
+                    <table class="min-w-full divide-y divide-slate-800 text-sm">
+                        <thead class="bg-slate-900/80 text-slate-300">
+                            <tr>
+                                <th class="px-3 py-2 text-left font-medium">Adresse</th>
+                                <th class="px-3 py-2 text-left font-medium">Nom affiché</th>
+                                <th class="px-3 py-2 text-left font-medium">Compte source</th>
+                                <th class="px-3 py-2 text-left font-medium">OVH</th>
+                                <th class="px-3 py-2 text-left font-medium">Quota</th>
+                                <th class="px-3 py-2 text-left font-medium">Mot de passe</th>
+                            </tr>
+                        </thead>
+                        <tbody id="target-rows" class="divide-y divide-slate-800 bg-slate-950/40">
+                            {% for account in targetAccounts %}
+                                <tr data-search="{{ account.email|lower }} {{ account.description|default('')|lower }} {{ account.sourceEmail|default('')|lower }}">
+                                    <td class="px-3 py-2 font-mono text-slate-100">{{ account.email }}</td>
+                                    <td class="px-3 py-2 text-slate-100">{{ account.description ?: '—' }}</td>
+                                    <td class="px-3 py-2 text-slate-300">{{ account.sourceEmail ?: '—' }}</td>
+                                    <td class="px-3 py-2">
+                                        {% if account.onOvh %}
+                                            <span class="inline-flex rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200">Présent</span>
+                                        {% else %}
+                                            <span class="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-200">Local seulement</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-3 py-2 text-slate-300">{{ account.quotaMb ? account.quotaMb ~ ' Mo' : '—' }}</td>
+                                    <td class="px-3 py-2">
+                                        {% if account.password %}
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <input type="password" readonly value="{{ account.password }}" class="js-password w-40 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100">
+                                                <button type="button" class="ui-button-secondary js-toggle-password px-2 py-1 text-xs">Afficher</button>
+                                                <button type="button" class="ui-button-primary js-copy-password px-2 py-1 text-xs">Copier</button>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-slate-500">Inconnu</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </section>
+
+        <section class="ui-card space-y-4">
             <h2 class="text-xl font-semibold">Créer un compte à la volée</h2>
             <p class="text-sm text-slate-300">Choisissez un compte @{{ sourceDomain }}, éventuellement un nouvel identifiant si le collaborateur change de nom, puis créez la boîte chez OVH.</p>
 
@@ -108,7 +178,12 @@
                                 {% set migration = row.migration %}
                                 <tr data-search="{{ row.sourceEmail|lower }} {{ row.suggestedLocalPart|lower }}">
                                     <td class="px-3 py-2 text-slate-100">{{ row.sourceEmail }}</td>
-                                    <td class="px-3 py-2 font-mono text-slate-100">{{ row.suggestedLocalPart }}@{{ targetDomain }}</td>
+                                    <td class="px-3 py-2 font-mono text-slate-100">
+                                        {{ row.suggestedLocalPart }}@{{ targetDomain }}
+                                        {% if existingTargetEmails[row.suggestedLocalPart ~ '@' ~ targetDomain] is defined %}
+                                            <span class="ml-2 inline-flex rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200">existe</span>
+                                        {% endif %}
+                                    </td>
                                     <td class="px-3 py-2">
                                         {% if migration is null %}
                                             <span class="inline-flex rounded-full border border-slate-600 bg-slate-800/60 px-2.5 py-1 text-xs text-slate-300">À créer</span>
@@ -176,6 +251,18 @@
                     }
                     targetInput.value = option.dataset.localPart || '';
                     descriptionInput.value = option.dataset.description || '';
+                });
+            }
+
+            const targetSearchInput = document.getElementById('target-search');
+            const targetRows = Array.from(document.querySelectorAll('#target-rows tr'));
+            if (targetSearchInput) {
+                targetSearchInput.addEventListener('input', () => {
+                    const query = (targetSearchInput.value || '').trim().toLowerCase();
+                    targetRows.forEach((row) => {
+                        const haystack = (row.dataset.search || '').toLowerCase();
+                        row.style.display = haystack.includes(query) ? '' : 'none';
+                    });
                 });
             }
 

@@ -33,9 +33,19 @@ final class AdminDomainMigrationController extends AbstractController
     public function index(): Response
     {
         $rows = $this->domainMigrationProvisioner->listBoardRows($this->sourceDomain);
+        $targetAccounts = $this->domainMigrationProvisioner->listTargetAccounts($this->targetDomain);
+        $existingTargetEmails = [];
+        foreach ($targetAccounts['accounts'] as $account) {
+            if ($account['onOvh']) {
+                $existingTargetEmails[$account['email']] = true;
+            }
+        }
 
         return $this->render('admin/domain_migration/index.html.twig', [
             'rows' => $rows,
+            'targetAccounts' => $targetAccounts['accounts'],
+            'targetAccountsError' => $targetAccounts['error'],
+            'existingTargetEmails' => $existingTargetEmails,
             'sourceDomain' => $this->sourceDomain,
             'targetDomain' => $this->targetDomain,
         ]);

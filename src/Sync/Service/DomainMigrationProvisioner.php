@@ -351,6 +351,167 @@ final class DomainMigrationProvisioner
     }
 
     /**
+     * @return array{
+     *     error: ?string,
+     *     accounts: list<array{
+     *         email: string,
+     *         localPart: string,
+     *         description: ?string,
+     *         sourceEmail: ?string,
+     *         password: ?string,
+     *         onOvh: bool,
+     *         quotaMb: ?int
+     *     }>
+     * }
+     */
+    public function listTargetAccounts(string $targetDomain): array
+    {
+        $targetDomain = mb_strtolower(trim($targetDomain));
+        $error = null;
+        $accountsByEmail = [];
+
+        /** @var list<EmailAccount> $localAccounts */
+        $localAccounts = $this->entityManager->getRepository(EmailAccount::class)->findBy(
+            ['domain' => $targetDomain],
+            ['email' => 'ASC']
+        );
+        foreach ($localAccounts as $account) {
+            $accountsByEmail[$account->getEmail()] = [
+                'email' => $account->getEmail(),
+                'localPart' => explode('@', $account->getEmail(), 2)[0],
+                'description' => $account->getLabel(),
+                'sourceEmail' => null,
+                'password' => null,
+                'onOvh' => false,
+                'quotaMb' => $account->getQuotaMb(),
+            ];
+        }
+
+        /** @var list<MailboxMigration> $migrations */
+        $migrations = $this->entityManager->getRepository(MailboxMigration::class)->findBy(
+            ['targetDomain' => $targetDomain],
+            ['targetEmail' => 'ASC']
+        );
+        foreach ($migrations as $migration) {
+            $email = $migration->getTargetEmail();
+            $password = null;
+            try {
+                $password = $this->decryptPassword($migration);
+            } catch (\Throwable) {
+                $password = null;
+            }
+
+            if (!isset($accountsByEmail[$email])) {
+                $accountsByEmail[$email] = [
+                    'email' => $email,
+                    'localPart' => explode('@', $email, 2)[0],
+                    'description' => $migration->getDescription(),
+                    'sourceEmail' => $migration->getSourceEmail(),
+                    'password' => $password,
+                    'onOvh' => MailboxMigration::STATUS_CREATED === $migration->getStatus(),
+                    'quotaMb' => null,
+                ];
+                continue;
+            }
+
+            $accountsByEmail[$email]['sourceEmail'] = $migration->getSourceEmail();
+            $accountsByEmail[$email]['password'] = $password;
+            if (null === $accountsByEmail[$email]['description'] || '' === $accountsByEmail[$email]['description']) {
+                $accountsByEmail[$email]['description'] = $migration->getDescription();
+            }
+        }
+
+        try {
+            foreach ($this->ovhMailboxManager->listLocalParts($targetDomain) as $localPart) {
+                $localPart = mb_strtolower(trim($localPart));
+                if ('' === $localPart) {
+                    continue;
+                }
+
+                $email = sprintf('%s@%s', $localPart, $targetDomain);
+                $remote = $this->ovhMailboxManager->find($targetDomain, $localPart);
+                $description = $this->extractRemoteDescription($remote);
+                $quotaMb = $this->extractRemoteQuotaMb($remote);
+
+                if (!isset($accountsByEmail[$email])) {
+                    $accountsByEmail[$email] = [
+                        'email' => $email,
+                        'localPart' => $localPart,
+                        'description' => $description,
+                        'sourceEmail' => null,
+                        'password' => null,
+                        'onOvh' => true,
+                        'quotaMb' => $quotaMb,
+                    ];
+                    continue;
+                }
+
+                $accountsByEmail[$email]['onOvh'] = true;
+                if (null === $accountsByEmail[$email]['description'] || '' === $accountsByEmail[$email]['description']) {
+                    $accountsByEmail[$email]['description'] = $description;
+                }
+                if (null === $accountsByEmail[$email]['quotaMb']) {
+                    $accountsByEmail[$email]['quotaMb'] = $quotaMb;
+                }
+            }
+        } catch (\Throwable $exception) {
+            $error = $exception->getMessage();
+        }
+
+        ksort($accountsByEmail);
+
+        return [
+            'error' => $error,
+            'accounts' => array_values($accountsByEmail),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed>|null $remoteAccount
+     */
+    private function extractRemoteDescription(?array $remoteAccount): ?string
+    {
+        if (null === $remoteAccount) {
+            return null;
+        }
+
+        foreach (['description', 'displayName'] as $key) {
+            if (!isset($remoteAccount[$key])) {
+                continue;
+            }
+
+            $value = trim((string) $remoteAccount[$key]);
+            if ('' !== $value) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed>|null $remoteAccount
+     */
+    private function extractRemoteQuotaMb(?array $remoteAccount): ?int
+    {
+        if (null === $remoteAccount) {
+            return null;
+        }
+
+        $raw = $remoteAccount['size'] ?? $remoteAccount['quota'] ?? null;
+        if (!is_numeric($raw) || (float) $raw <= 0) {
+            return null;
+        }
+
+        $value = (float) $raw;
+        if ($value > 1024 * 1024) {
+            return (int) round($value / 1024 / 1024);
+        }
+
+        return (int) round($value);
+    }
+
+    /**
      * @return list<list<string>>
      */
     public function exportPasswordsRows(): array
