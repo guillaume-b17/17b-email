@@ -4,164 +4,281 @@
 
 {% block body %}
     {% set accountParams = currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : mailbox_route_params() %}
-    <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
-        <section class="ui-card space-y-4">
-            {% for message in app.flashes('success') %}
-                {% include 'components/ui/alert.html.twig' with {
-                    tone: 'success',
-                    title: 'Succès',
-                    message: message
-                } %}
-            {% endfor %}
+    {% set wizardParams = client ? accountParams|merge({ client: client }) : accountParams %}
+    <main id="contenu-principal" class="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
+        {% if canSetup %}
+            <a
+                class="fixed right-6 top-6 z-50 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-800 bg-slate-950/40 text-slate-200 hover:bg-slate-900 hover:text-slate-100"
+                href="{{ path('app_user_account', accountParams) }}"
+                aria-label="Fermer"
+                title="Fermer"
+            >
+                <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                    <path d="M6 6L18 18"></path>
+                    <path d="M18 6L6 18"></path>
+                </svg>
+            </a>
+        {% endif %}
 
-            {% for message in app.flashes('error') %}
-                {% include 'components/ui/alert.html.twig' with {
-                    tone: 'danger',
-                    title: 'Erreur',
-                    message: message
-                } %}
-            {% endfor %}
-
-            {% if passwordError %}
-                {% include 'components/ui/alert.html.twig' with {
-                    tone: 'warning',
-                    title: 'Mot de passe illisible',
-                    message: 'Le mot de passe stocké ne peut pas être déchiffré. Définissez-en un nouveau ci-dessous.'
-                } %}
-            {% endif %}
-
-            <div>
-                <p class="text-xs uppercase tracking-wide text-slate-400">Nouveau domaine</p>
-                <h1 class="text-2xl font-semibold">Ajouter votre compte @17b.fr</h1>
-                <p class="mt-2 text-sm text-slate-300">Votre adresse @b17.fr reste active. Ajoutez le nouveau compte en parallèle dans votre logiciel de messagerie.</p>
-            </div>
-        </section>
-
-        {% set targetEmail = emailAccount ? emailAccount.email : (mailboxMigration ? mailboxMigration.targetEmail : null) %}
-        {% set sourceEmail = mailboxMigration ? mailboxMigration.sourceEmail : app.user.userIdentifier %}
-        {% set canSetup = targetEmail is not null %}
-        {% set canChangePassword = emailAccount is not null %}
-
-        {% if not canSetup %}
-            {% include 'components/ui/alert.html.twig' with {
-                tone: 'info',
-                title: 'Compte pas encore créé',
-                message: 'Le compte 17b.fr n’est pas encore provisionné pour cette adresse. Contactez un administrateur.'
-            } %}
-        {% elseif mailboxMigration and mailboxMigration.status == 'skipped' %}
+        {% for message in app.flashes('success') %}
+            {% include 'components/ui/alert.html.twig' with { tone: 'success', title: 'Succès', message: message } %}
+        {% endfor %}
+        {% for message in app.flashes('error') %}
+            {% include 'components/ui/alert.html.twig' with { tone: 'danger', title: 'Erreur', message: message } %}
+        {% endfor %}
+        {% if passwordError %}
             {% include 'components/ui/alert.html.twig' with {
                 tone: 'warning',
-                title: 'Compte déjà présent chez OVH',
-                message: mailboxMigration.lastError ?: 'Le mot de passe n’a pas été enregistré. Un administrateur peut le réinitialiser, ou définissez-en un ci-dessous.'
-            } %}
-        {% elseif mailboxMigration and mailboxMigration.status == 'error' %}
-            {% include 'components/ui/alert.html.twig' with {
-                tone: 'danger',
-                title: 'Création incomplète',
-                message: mailboxMigration.lastError ?: 'La création du compte a échoué.'
+                title: 'Mot de passe illisible',
+                message: 'Le mot de passe stocké ne peut pas être déchiffré. Définis-en un nouveau à l’étape identifiants.'
             } %}
         {% endif %}
 
-        {% if canSetup %}
+        {% if not canSetup %}
             <section class="ui-card space-y-4">
-                <h2 class="text-xl font-semibold">Identifiants</h2>
-                <dl class="grid gap-4 sm:grid-cols-2">
+                <h1 class="text-2xl font-semibold">Ajouter votre compte @17b.fr</h1>
+                {% include 'components/ui/alert.html.twig' with {
+                    tone: 'info',
+                    title: 'Compte pas encore créé',
+                    message: 'Le compte 17b.fr n’est pas encore provisionné pour cette adresse. Contacte un administrateur.'
+                } %}
+            </section>
+        {% else %}
+            <div class="mx-auto w-full max-w-lg">
+                <p class="text-center text-xs uppercase tracking-wide text-slate-400">Étape {{ stepNumber }} / {{ stepCount }}</p>
+                <div class="mt-2 h-1 overflow-hidden rounded-full bg-slate-800">
+                    <div class="h-full bg-indigo-400" style="width: {{ (stepNumber / stepCount * 100)|round }}%"></div>
+                </div>
+            </div>
+
+            {% if previousStep %}
+                <div class="mx-auto flex w-full max-w-lg justify-start">
+                    <a class="ui-button-secondary" href="{{ path('app_user_mailbox_setup', wizardParams|merge({ step: previousStep })) }}">Retour</a>
+                </div>
+            {% endif %}
+
+            {% if step == 'intro' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">On ajoute ta nouvelle adresse</h1>
+                    <p class="mt-4 text-base text-slate-300">{{ sourceEmail }} reste active. On va ajouter <strong>{{ targetEmail }}</strong> à côté, dans le même logiciel de messagerie.</p>
+                    <p class="mt-2 text-sm text-slate-400">Ne supprime pas l’ancien compte. Les deux coexistent.</p>
+                </div>
+                <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                    <a class="ui-button-primary px-6 py-3 text-base" href="{{ path('app_user_mailbox_setup', wizardParams|merge({ step: nextStep })) }}">C’est parti</a>
+                </div>
+
+            {% elseif step == 'client' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Quel logiciel utilises-tu&nbsp;?</h1>
+                    <p class="mt-3 text-sm text-slate-400">Les étapes suivantes s’adaptent à ton choix.</p>
+                </div>
+                <div class="mx-auto mt-8 grid max-w-lg gap-3">
+                    {% for clientKey, clientName in clients %}
+                        <a
+                            class="flex items-center justify-between rounded-xl border {{ client == clientKey ? 'border-indigo-400 bg-indigo-500/10' : 'border-slate-800 bg-slate-950/40' }} px-4 py-4 text-base font-medium text-slate-100 hover:border-indigo-400"
+                            href="{{ path('app_user_mailbox_setup', accountParams|merge({ step: 'identifiants', client: clientKey })) }}"
+                        >
+                            <span>{{ clientName }}</span>
+                            <span class="text-slate-400">→</span>
+                        </a>
+                    {% endfor %}
+                </div>
+
+            {% elseif step == 'identifiants' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Voici tes identifiants</h1>
+                    <p class="mt-3 text-sm text-slate-400">Tu en auras besoin pour ajouter le compte. Copie-les, ou définis un mot de passe si aucun n’est enregistré.</p>
+                </div>
+                <section class="ui-card mx-auto mt-8 max-w-lg space-y-4">
                     <div>
-                        <dt class="text-xs uppercase tracking-wide text-slate-400">Ancienne adresse</dt>
-                        <dd class="mt-1 font-medium">{{ sourceEmail }}</dd>
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Adresse à ajouter</p>
+                        <div class="mt-1 flex flex-wrap items-center gap-2">
+                            <input id="mail-email" type="text" readonly value="{{ targetEmail }}" class="min-w-[16rem] flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-slate-100">
+                            <button type="button" class="ui-button-primary" data-copy="#mail-email">Copier</button>
+                        </div>
                     </div>
                     <div>
-                        <dt class="text-xs uppercase tracking-wide text-slate-400">Nouvelle adresse</dt>
-                        <dd class="mt-1 font-medium">{{ targetEmail }}</dd>
-                    </div>
-                    <div class="sm:col-span-2">
-                        <dt class="text-xs uppercase tracking-wide text-slate-400">Mot de passe</dt>
-                        <dd class="mt-1 flex flex-wrap items-center gap-2">
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Mot de passe</p>
+                        <div class="mt-1 flex flex-wrap items-center gap-2">
                             {% if mailPassword %}
-                                <input
-                                    id="mail-password"
-                                    type="password"
-                                    readonly
-                                    value="{{ mailPassword }}"
-                                    class="min-w-[16rem] flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-slate-100"
-                                >
+                                <input id="mail-password" type="password" readonly value="{{ mailPassword }}" class="min-w-[16rem] flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-slate-100">
                                 <button type="button" class="ui-button-secondary" data-toggle-password="mail-password">Afficher</button>
                                 <button type="button" class="ui-button-primary" data-copy="#mail-password">Copier</button>
                             {% else %}
-                                <span class="text-sm text-slate-300">Aucun mot de passe enregistré. Définissez-en un ci-dessous pour l’ajouter dans votre logiciel de messagerie.</span>
+                                <p class="text-sm text-slate-300">Aucun mot de passe enregistré. Définis-en un ci-dessous avant de continuer.</p>
                             {% endif %}
-                        </dd>
-                    </div>
-                </dl>
-            </section>
-
-            <section class="ui-card space-y-4">
-                <h2 class="text-xl font-semibold">Paramètres serveur</h2>
-                <p class="text-sm text-slate-300">Nom d’utilisateur: l’adresse complète <strong>{{ targetEmail }}</strong></p>
-                <dl class="grid gap-4 sm:grid-cols-2">
-                    <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
-                        <dt class="text-xs uppercase tracking-wide text-slate-400">Réception IMAP</dt>
-                        <dd class="mt-2 space-y-1 text-sm">
-                            <p>Serveur: <span class="font-mono">{{ mailClientSettings.imapHost }}</span></p>
-                            <p>Port: <span class="font-mono">{{ mailClientSettings.imapPort }}</span></p>
-                            <p>Sécurité: {{ mailClientSettings.imapEncryption }}</p>
-                        </dd>
-                    </div>
-                    <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
-                        <dt class="text-xs uppercase tracking-wide text-slate-400">Envoi SMTP</dt>
-                        <dd class="mt-2 space-y-1 text-sm">
-                            <p>Serveur: <span class="font-mono">{{ mailClientSettings.smtpHost }}</span></p>
-                            <p>Port: <span class="font-mono">{{ mailClientSettings.smtpPort }}</span></p>
-                            <p>Sécurité: {{ mailClientSettings.smtpEncryption }}</p>
-                        </dd>
-                    </div>
-                </dl>
-            </section>
-
-            <section class="ui-card space-y-4">
-                <h2 class="text-xl font-semibold">Ajouter le compte automatiquement</h2>
-                <p class="text-sm text-slate-300">Sur iPhone, iPad ou Mac, téléchargez le profil: il préremplit serveur, identifiant et mot de passe.</p>
-                {% if mailPassword %}
-                    <a class="ui-button-primary inline-flex" href="{{ path('app_user_mailbox_setup_apple', accountParams) }}">Télécharger le profil Apple Mail</a>
-                {% else %}
-                    <p class="text-sm text-slate-400">Le profil Apple sera disponible dès qu’un mot de passe est enregistré.</p>
-                {% endif %}
-            </section>
-
-            <section class="ui-card space-y-4">
-                <h2 class="text-xl font-semibold">Outlook, Thunderbird et les autres</h2>
-                <ol class="list-decimal space-y-2 pl-5 text-sm text-slate-300">
-                    <li>Ajoutez un compte IMAP (pas Exchange, pas POP).</li>
-                    <li>Adresse e-mail: <span class="font-mono text-slate-100">{{ targetEmail }}</span></li>
-                    <li>Mot de passe: celui affiché ci-dessus (ou celui que vous définissez).</li>
-                    <li>Serveur de réception: <span class="font-mono text-slate-100">{{ mailClientSettings.imapHost }}</span> / {{ mailClientSettings.imapPort }} / SSL</li>
-                    <li>Serveur d’envoi: <span class="font-mono text-slate-100">{{ mailClientSettings.smtpHost }}</span> / {{ mailClientSettings.smtpPort }} / SSL</li>
-                    <li>Authentification SMTP activée, avec la même adresse et le même mot de passe.</li>
-                </ol>
-            </section>
-
-            {% if canChangePassword %}
-                <section class="ui-card space-y-4">
-                    <h2 class="text-xl font-semibold">Choisir un mot de passe</h2>
-                    <p class="text-sm text-slate-300">Entre 9 et 30 caractères, avec majuscule, minuscule, chiffre et caractère spécial. OVH refuse les accents.</p>
-                    <form method="post" action="{{ path('app_user_mailbox_setup_password') }}" class="space-y-3">
-                        <input type="hidden" name="_token" value="{{ csrf_token('mailbox_setup_password') }}">
-                        {% if currentAccountId %}
-                            <input type="hidden" name="accountId" value="{{ currentAccountId }}">
-                        {% endif %}
-                        <div class="grid gap-3 sm:grid-cols-2">
-                            <label class="block text-sm">
-                                <span class="mb-1 block text-slate-200">Nouveau mot de passe</span>
-                                <input type="password" name="password" required minlength="9" maxlength="30" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
-                            </label>
-                            <label class="block text-sm">
-                                <span class="mb-1 block text-slate-200">Confirmation</span>
-                                <input type="password" name="passwordConfirmation" required minlength="9" maxlength="30" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
-                            </label>
                         </div>
-                        <button type="submit" class="ui-button-primary">Enregistrer le mot de passe</button>
-                    </form>
+                    </div>
+                    {% if canChangePassword %}
+                        <form method="post" action="{{ path('app_user_mailbox_setup_password') }}" class="space-y-3 border-t border-slate-800 pt-4">
+                            <input type="hidden" name="_token" value="{{ csrf_token('mailbox_setup_password') }}">
+                            {% if currentAccountId %}
+                                <input type="hidden" name="accountId" value="{{ currentAccountId }}">
+                            {% endif %}
+                            <input type="hidden" name="step" value="identifiants">
+                            {% if client %}
+                                <input type="hidden" name="client" value="{{ client }}">
+                            {% endif %}
+                            <p class="text-sm text-slate-300">Choisir ou changer le mot de passe (9 à 30 caractères, majuscule, minuscule, chiffre, caractère spécial, pas d’accents).</p>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <input type="password" name="password" required minlength="9" maxlength="30" placeholder="Nouveau mot de passe" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
+                                <input type="password" name="passwordConfirmation" required minlength="9" maxlength="30" placeholder="Confirmation" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
+                            </div>
+                            <button type="submit" class="ui-button-secondary">Enregistrer le mot de passe</button>
+                        </form>
+                    {% endif %}
                 </section>
+                <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                    {% if mailPassword and nextStep %}
+                        <a class="ui-button-primary px-6 py-3 text-base" href="{{ path('app_user_mailbox_setup', wizardParams|merge({ step: nextStep })) }}">Continuer</a>
+                    {% else %}
+                        <p class="text-sm text-slate-400">Enregistre un mot de passe pour passer à l’étape suivante.</p>
+                    {% endif %}
+                </div>
+
+            {% elseif step == 'profil' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Installation automatique</h1>
+                    {% if client == 'iphone' %}
+                        <p class="mt-3 text-sm text-slate-300">Sur iPhone ou iPad, ouvre ce profil : il préremplit serveur, identifiant et mot de passe. L’ancien compte @b17.fr reste en place.</p>
+                    {% else %}
+                        <p class="mt-3 text-sm text-slate-300">Sur Mac, télécharge le profil puis double-clique dessus. Mail ajoute {{ targetEmail }} sans toucher à {{ sourceEmail }}.</p>
+                    {% endif %}
+                </div>
+                <section class="ui-card mx-auto mt-8 max-w-lg space-y-4">
+                    <ol class="list-decimal space-y-2 pl-5 text-sm text-slate-300">
+                        {% if client == 'iphone' %}
+                            <li>Télécharge le profil ci-dessous (de préférence depuis Safari).</li>
+                            <li>Ouvre Réglages : un bandeau « Profil téléchargé » apparaît.</li>
+                            <li>Installe le profil, puis saisis le code de l’iPhone si demandé.</li>
+                            <li>Ouvre Mail : tu dois voir {{ targetEmail }} en plus de {{ sourceEmail }}.</li>
+                        {% else %}
+                            <li>Télécharge le profil ci-dessous.</li>
+                            <li>Double-clique le fichier <span class="font-mono">.mobileconfig</span>.</li>
+                            <li>Va dans Réglages Système → Confidentialité et sécurité → Profils, puis installe-le.</li>
+                            <li>Ouvre Mail : {{ targetEmail }} apparaît à côté de l’ancien compte.</li>
+                        {% endif %}
+                    </ol>
+                    {% if mailPassword %}
+                        <a class="ui-button-primary inline-flex" href="{{ path('app_user_mailbox_setup_apple', wizardParams) }}">Télécharger le profil Apple Mail</a>
+                    {% else %}
+                        <p class="text-sm text-slate-400">Le profil sera disponible dès qu’un mot de passe est enregistré.</p>
+                    {% endif %}
+                </section>
+                <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                    <a class="ui-button-primary px-6 py-3 text-base" href="{{ path('app_user_mailbox_setup', wizardParams|merge({ step: nextStep })) }}">Continuer</a>
+                </div>
+
+            {% elseif step == 'ajout' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Ajoute un nouveau compte</h1>
+                    <p class="mt-3 text-sm text-slate-300">Dans {{ clientLabel }}, crée un compte <strong>en plus</strong> de {{ sourceEmail }}. Ne remplace pas l’ancien, ne choisis pas Exchange ni POP.</p>
+                </div>
+                <section class="ui-card mx-auto mt-8 max-w-lg space-y-4">
+                    <ol class="list-decimal space-y-3 pl-5 text-sm text-slate-300">
+                        {% if client == 'outlook' %}
+                            <li>Ouvre Outlook → Fichier → Ajouter un compte (ou Paramètres → Comptes → Ajouter un compte).</li>
+                            <li>Saisis <span class="font-mono text-slate-100">{{ targetEmail }}</span>, puis choisis la configuration manuelle.</li>
+                            <li>Type de compte : <strong>IMAP</strong> (pas Microsoft 365, pas Exchange, pas POP).</li>
+                            <li>Colle le mot de passe copié à l’étape précédente.</li>
+                            <li>Si Outlook propose de « migrer » ou remplacer un compte, refuse : tu dois avoir deux boîtes.</li>
+                        {% elseif client == 'apple-mac' %}
+                            <li>Ouvre Mail → Réglages → Comptes → Ajouter un compte.</li>
+                            <li>Choisis « Autre compte Mail… », pas iCloud ni Exchange.</li>
+                            <li>Nom : celui que tu veux afficher. Adresse : <span class="font-mono text-slate-100">{{ targetEmail }}</span>.</li>
+                            <li>Colle le mot de passe, puis valide. Mail demande ensuite IMAP/SMTP à l’étape suivante.</li>
+                            <li>Laisse {{ sourceEmail }} coché dans la barre latérale.</li>
+                        {% elseif client == 'iphone' %}
+                            <li>Réglages → Apps → Mail → Comptes → Ajouter un compte (selon iOS : Mail → Comptes).</li>
+                            <li>Choisis « Autre » → Ajouter un compte Mail. Pas Google, pas Microsoft, pas Exchange.</li>
+                            <li>Nom, adresse <span class="font-mono text-slate-100">{{ targetEmail }}</span>, mot de passe, une description du type « 17b ».</li>
+                            <li>Quand iOS demande le serveur, passe à l’étape suivante de ce tutoriel.</li>
+                            <li>Ne supprime pas le compte {{ sourceEmail }} déjà présent.</li>
+                        {% elseif client == 'thunderbird' %}
+                            <li>Thunderbird → ☰ → Paramètres des comptes → Actions pour le compte → Ajouter un compte de messagerie.</li>
+                            <li>Adresse : <span class="font-mono text-slate-100">{{ targetEmail }}</span>, puis « Configurer manuellement ».</li>
+                            <li>Protocole : IMAP. Identifiant : l’adresse complète.</li>
+                            <li>Colle le mot de passe. Termine, sans retirer l’ancien compte {{ sourceEmail }}.</li>
+                        {% elseif client == 'gmail' %}
+                            <li>Sur téléphone : Gmail → ta photo → Ajouter un autre compte → Autre.</li>
+                            <li>Choisis IMAP. Adresse : <span class="font-mono text-slate-100">{{ targetEmail }}</span>. Identifiant = l’adresse complète.</li>
+                            <li>Colle le mot de passe, puis les serveurs de l’étape suivante.</li>
+                            <li>Sur ordinateur, l’app Gmail ou un vrai client (Outlook, Mail, Thunderbird) est plus simple que Gmail web.</li>
+                        {% else %}
+                            <li>Ouvre les paramètres du logiciel → Ajouter un compte (pas « remplacer », pas « migrer »).</li>
+                            <li>Type : <strong>IMAP</strong> uniquement.</li>
+                            <li>Nom d’utilisateur : l’adresse complète <span class="font-mono text-slate-100">{{ targetEmail }}</span>.</li>
+                            <li>Mot de passe : celui de l’étape identifiants.</li>
+                            <li>Les serveurs IMAP/SMTP sont à l’étape suivante.</li>
+                        {% endif %}
+                    </ol>
+                </section>
+                <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                    <a class="ui-button-primary px-6 py-3 text-base" href="{{ path('app_user_mailbox_setup', wizardParams|merge({ step: nextStep })) }}">Continuer</a>
+                </div>
+
+            {% elseif step == 'parametres' %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Paramètres serveur</h1>
+                    <p class="mt-3 text-sm text-slate-300">Recopie ces valeurs si le logiciel les demande. Nom d’utilisateur : l’adresse complète.</p>
+                </div>
+                <section class="ui-card mx-auto mt-8 max-w-lg space-y-4">
+                    <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Réception IMAP</p>
+                        <dl class="mt-2 space-y-2 text-sm">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <dt class="text-slate-400">Serveur</dt>
+                                <dd class="flex items-center gap-2">
+                                    <span class="font-mono text-slate-100">{{ mailClientSettings.imapHost }}</span>
+                                    <button type="button" class="ui-button-secondary px-2 py-1 text-xs" data-copy-text="{{ mailClientSettings.imapHost }}">Copier</button>
+                                </dd>
+                            </div>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <dt class="text-slate-400">Port</dt>
+                                <dd class="font-mono text-slate-100">{{ mailClientSettings.imapPort }}</dd>
+                            </div>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <dt class="text-slate-400">Sécurité</dt>
+                                <dd class="text-slate-100">{{ mailClientSettings.imapEncryption }}</dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Envoi SMTP</p>
+                        <dl class="mt-2 space-y-2 text-sm">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <dt class="text-slate-400">Serveur</dt>
+                                <dd class="flex items-center gap-2">
+                                    <span class="font-mono text-slate-100">{{ mailClientSettings.smtpHost }}</span>
+                                    <button type="button" class="ui-button-secondary px-2 py-1 text-xs" data-copy-text="{{ mailClientSettings.smtpHost }}">Copier</button>
+                                </dd>
+                            </div>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <dt class="text-slate-400">Port</dt>
+                                <dd class="font-mono text-slate-100">{{ mailClientSettings.smtpPort }}</dd>
+                            </div>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <dt class="text-slate-400">Sécurité</dt>
+                                <dd class="text-slate-100">{{ mailClientSettings.smtpEncryption }}</dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <p class="text-sm text-slate-400">Authentification SMTP activée, avec la même adresse et le même mot de passe que pour IMAP.</p>
+                </section>
+                <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                    <a class="ui-button-primary px-6 py-3 text-base" href="{{ path('app_user_mailbox_setup', wizardParams|merge({ step: nextStep })) }}">Continuer</a>
+                </div>
+
+            {% else %}
+                <div class="mx-auto max-w-lg text-center">
+                    <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">C’est bon</h1>
+                    <p class="mt-4 text-base text-slate-300">Tu dois maintenant voir <strong>{{ targetEmail }}</strong> et <strong>{{ sourceEmail }}</strong> dans {{ clientLabel|default('ton logiciel') }}.</p>
+                    <p class="mt-2 text-sm text-slate-400">Les e-mails déjà reçus sur @b17.fr restent dans l’ancien compte. Les nouveaux arrivent aussi sur @17b.fr.</p>
+                </div>
+                <div class="mx-auto mt-8 flex max-w-lg flex-col gap-3">
+                    <a class="ui-button-primary px-6 py-3 text-center text-base" href="{{ path('app_user_account', { accountId: currentAccountId }) }}">Gérer le répondeur et les redirections</a>
+                    <a class="ui-button-secondary px-6 py-3 text-center text-base" href="{{ path('app_user_mailbox_setup', accountParams|merge({ step: 'client' })) }}">Recommencer avec un autre logiciel</a>
+                </div>
             {% endif %}
         {% endif %}
     </main>
@@ -198,6 +315,21 @@
                     } catch {
                         input.select();
                         document.execCommand('copy');
+                    }
+                });
+            });
+
+            document.querySelectorAll('[data-copy-text]').forEach((button) => {
+                button.addEventListener('click', async () => {
+                    const value = button.getAttribute('data-copy-text') || '';
+                    try {
+                        await navigator.clipboard.writeText(value);
+                        button.textContent = 'Copié';
+                        setTimeout(() => {
+                            button.textContent = 'Copier';
+                        }, 1500);
+                    } catch {
+                        // ignore
                     }
                 });
             });

@@ -22,6 +22,15 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[Route('/compte/messagerie')]
 final class MailboxSetupController extends AbstractController
 {
+    private const CLIENTS = [
+        'outlook' => 'Outlook',
+        'apple-mac' => 'Mail sur Mac',
+        'iphone' => 'iPhone ou iPad',
+        'thunderbird' => 'Thunderbird',
+        'gmail' => 'Gmail',
+        'autre' => 'Autre logiciel',
+    ];
+
     public function __construct(
         private readonly DomainMigrationProvisioner $domainMigrationProvisioner,
         private readonly AppleMailProfileGenerator $appleMailProfileGenerator,
@@ -54,6 +63,15 @@ final class MailboxSetupController extends AbstractController
             }
         }
 
+        $client = $this->normalizeClient((string) $request->query->get('client', ''));
+        $step = $this->normalizeStep((string) $request->query->get('step', 'intro'), $client);
+        $steps = $this->stepsForClient($client);
+        $stepIndex = array_search($step, $steps, true);
+        $previousStep = false !== $stepIndex && $stepIndex > 0 ? $steps[$stepIndex - 1] : null;
+        $nextStep = false !== $stepIndex && isset($steps[$stepIndex + 1]) ? $steps[$stepIndex + 1] : null;
+        $targetEmail = $setupAccount?->getEmail() ?? $migration?->getTargetEmail();
+        $canSetup = null !== $targetEmail && '' !== $targetEmail;
+
         return $this->render('user/mailbox_setup.html.twig', [
             'emailAccount' => $setupAccount,
             'mailboxMigration' => $migration,
@@ -61,6 +79,19 @@ final class MailboxSetupController extends AbstractController
             'passwordError' => $passwordError,
             'mailClientSettings' => $this->mailClientSettings->toArray(),
             'currentAccountId' => $setupAccount?->getId() ?? $currentAccount?->getId(),
+            'hideAppHeader' => $canSetup,
+            'step' => $step,
+            'client' => $client,
+            'clients' => self::CLIENTS,
+            'clientLabel' => self::CLIENTS[$client] ?? null,
+            'previousStep' => $previousStep,
+            'nextStep' => $nextStep,
+            'stepNumber' => false === $stepIndex ? 1 : $stepIndex + 1,
+            'stepCount' => count($steps),
+            'targetEmail' => $targetEmail,
+            'sourceEmail' => $migration?->getSourceEmail() ?? $user->getEmail(),
+            'canSetup' => $canSetup,
+            'canChangePassword' => $setupAccount instanceof EmailAccount,
         ]);
     }
 
@@ -79,10 +110,15 @@ final class MailboxSetupController extends AbstractController
             $currentAccount instanceof EmailAccount ? $currentAccount->getOwner() : $user,
             $currentAccount
         );
+        $wizardParams = $this->wizardRouteParams(
+            $setupAccount ?? $currentAccount,
+            (string) $request->request->get('step', 'identifiants'),
+            (string) $request->request->get('client', '')
+        );
         if (!$setupAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Aucun compte 17b.fr n’est associé à cet utilisateur.');
 
-            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedMailboxResolver->routeParams($currentAccount));
+            return $this->redirectToRoute('app_user_mailbox_setup', $wizardParams);
         }
 
         $password = (string) $request->request->get('password', '');
@@ -90,20 +126,20 @@ final class MailboxSetupController extends AbstractController
         if ($password !== $confirmation) {
             $this->addFlash('error', 'Les deux mots de passe ne correspondent pas.');
 
-            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedMailboxResolver->routeParams($setupAccount));
+            return $this->redirectToRoute('app_user_mailbox_setup', $wizardParams);
         }
 
         try {
             $this->mailboxPasswordGenerator->assertValid($password);
             $this->domainMigrationProvisioner->changeMailboxPassword($setupAccount, $password);
-            $this->addFlash('success', 'Mot de passe du compte 17b.fr mis à jour. Utilisez-le dans votre logiciel de messagerie.');
+            $this->addFlash('success', 'Mot de passe du compte 17b.fr mis à jour. Utilise-le dans ton logiciel de messagerie.');
         } catch (\InvalidArgumentException $exception) {
             $this->addFlash('error', $exception->getMessage());
         } catch (\Throwable $exception) {
             $this->addFlash('error', sprintf('Impossible de changer le mot de passe OVH: %s', $exception->getMessage()));
         }
 
-        return $this->redirectToRoute('app_user_mailbox_setup', $this->managedMailboxResolver->routeParams($setupAccount));
+        return $this->redirectToRoute('app_user_mailbox_setup', $wizardParams);
     }
 
     #[Route('/apple-mail', name: 'app_user_mailbox_setup_apple', methods: ['GET'])]
@@ -118,7 +154,10 @@ final class MailboxSetupController extends AbstractController
         if (!$setupAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Aucun compte 17b.fr n’est associé à cet utilisateur.');
 
-            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedMailboxResolver->routeParams($currentAccount));
+            return $this->redirectToRoute(
+                'app_user_mailbox_setup',
+                $this->wizardRouteParams($currentAccount, 'identifiants', (string) $request->query->get('client', ''))
+            );
         }
 
         $migration = $this->domainMigrationProvisioner->findForEmail($setupAccount->getEmail());
@@ -132,9 +171,12 @@ final class MailboxSetupController extends AbstractController
         }
 
         if (null === $password || '' === $password) {
-            $this->addFlash('error', 'Définissez d’abord un mot de passe pour télécharger le profil Apple Mail.');
+            $this->addFlash('error', 'Définis d’abord un mot de passe pour télécharger le profil Apple Mail.');
 
-            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedMailboxResolver->routeParams($setupAccount));
+            return $this->redirectToRoute(
+                'app_user_mailbox_setup',
+                $this->wizardRouteParams($setupAccount, 'identifiants', (string) $request->query->get('client', ''))
+            );
         }
 
         $profile = $this->appleMailProfileGenerator->generate(
@@ -160,5 +202,57 @@ final class MailboxSetupController extends AbstractController
         }
 
         return $user;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stepsForClient(string $client): array
+    {
+        $steps = ['intro', 'client', 'identifiants'];
+        if ('' === $client) {
+            return $steps;
+        }
+
+        if (\in_array($client, ['apple-mac', 'iphone'], true)) {
+            $steps[] = 'profil';
+        }
+
+        $steps[] = 'ajout';
+        $steps[] = 'parametres';
+        $steps[] = 'termine';
+
+        return $steps;
+    }
+
+    private function normalizeClient(string $client): string
+    {
+        return isset(self::CLIENTS[$client]) ? $client : '';
+    }
+
+    private function normalizeStep(string $step, string $client): string
+    {
+        $steps = $this->stepsForClient($client);
+        if (\in_array($step, $steps, true)) {
+            return $step;
+        }
+
+        return 'intro';
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function wizardRouteParams(?EmailAccount $emailAccount, string $step, string $client): array
+    {
+        $client = $this->normalizeClient($client);
+        $step = $this->normalizeStep($step, $client);
+        $params = $this->managedMailboxResolver->routeParams($emailAccount);
+        $params['step'] = $step;
+        if ('' !== $client) {
+            $params['client'] = $client;
+        }
+
+        return $params;
     }
 }
