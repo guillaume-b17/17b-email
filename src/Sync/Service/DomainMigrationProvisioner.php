@@ -360,7 +360,8 @@ final class DomainMigrationProvisioner
      *         sourceEmail: ?string,
      *         password: ?string,
      *         onOvh: bool,
-     *         quotaMb: ?int
+     *         quotaMb: ?int,
+     *         accountId: ?int
      *     }>
      * }
      */
@@ -384,6 +385,7 @@ final class DomainMigrationProvisioner
                 'password' => null,
                 'onOvh' => false,
                 'quotaMb' => $account->getQuotaMb(),
+                'accountId' => $account->getId(),
             ];
         }
 
@@ -410,6 +412,7 @@ final class DomainMigrationProvisioner
                     'password' => $password,
                     'onOvh' => MailboxMigration::STATUS_CREATED === $migration->getStatus(),
                     'quotaMb' => null,
+                    'accountId' => null,
                 ];
                 continue;
             }
@@ -442,6 +445,7 @@ final class DomainMigrationProvisioner
                         'password' => null,
                         'onOvh' => true,
                         'quotaMb' => $quotaMb,
+                        'accountId' => null,
                     ];
                     continue;
                 }
@@ -459,6 +463,9 @@ final class DomainMigrationProvisioner
         }
 
         ksort($accountsByEmail);
+        foreach ($accountsByEmail as $email => $accountRow) {
+            $accountsByEmail[$email]['accountId'] = $this->findEmailAccountId($email);
+        }
 
         return [
             'error' => $error,
@@ -645,6 +652,34 @@ final class DomainMigrationProvisioner
         $this->entityManager->flush();
     }
 
+    public function changeMailboxPassword(EmailAccount $emailAccount, string $plainPassword): MailboxMigration
+    {
+        $this->passwordGenerator->assertValid($plainPassword);
+        [$localPart, $domain] = explode('@', $emailAccount->getEmail(), 2);
+        $this->ovhMailboxManager->changePassword($domain, $localPart, $plainPassword);
+
+        $migration = $this->findForEmail($emailAccount->getEmail());
+        if (!$migration instanceof MailboxMigration) {
+            $migration = new MailboxMigration(
+                $emailAccount->getOwner(),
+                $emailAccount->getOwner()->getEmail(),
+                $emailAccount->getEmail(),
+                $emailAccount->getDomain()
+            );
+            $this->entityManager->persist($migration);
+        }
+
+        $migration
+            ->setPasswordEncrypted($this->passwordCipher->encrypt($plainPassword))
+            ->setStatus(MailboxMigration::STATUS_CREATED)
+            ->setLastError(null)
+            ->setTargetEmailAccount($emailAccount)
+            ->markProvisioned();
+        $this->entityManager->flush();
+
+        return $migration;
+    }
+
     public function decryptPassword(MailboxMigration $migration): ?string
     {
         $payload = $migration->getPasswordEncrypted();
@@ -675,6 +710,16 @@ final class DomainMigrationProvisioner
         );
 
         return $byTarget;
+    }
+
+    private function findEmailAccountId(string $email): ?int
+    {
+        /** @var EmailAccount|null $emailAccount */
+        $emailAccount = $this->entityManager->getRepository(EmailAccount::class)->findOneBy([
+            'email' => $email,
+        ]);
+
+        return $emailAccount?->getId();
     }
 
     private function resolveOwner(string $sourceEmail): User

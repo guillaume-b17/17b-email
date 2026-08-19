@@ -11,6 +11,7 @@ use App\Security\Form\RequestOtpType;
 use App\Security\Form\VerifyOtpType;
 use App\Security\Service\AdminRoleResolver;
 use App\Security\Service\AllowedEmailChecker;
+use App\Security\Service\LoginUserResolver;
 use App\Security\Service\OtpCodeManager;
 use App\Sync\Service\UserMailboxSynchronizer;
 use Doctrine\ORM\EntityManagerInterface;
@@ -34,6 +35,7 @@ final class OtpLoginController extends AbstractController
         private readonly OtpCodeManager $otpCodeManager,
         private readonly AllowedEmailChecker $allowedEmailChecker,
         private readonly AdminRoleResolver $adminRoleResolver,
+        private readonly LoginUserResolver $loginUserResolver,
         private readonly UserMailboxSynchronizer $userMailboxSynchronizer,
         private readonly Security $security,
         private readonly LoggerInterface $logger,
@@ -173,14 +175,7 @@ final class OtpLoginController extends AbstractController
                     'ip' => $request->getClientIp(),
                 ]);
 
-                /** @var User|null $user */
-                $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
-                if (!$user instanceof User) {
-                    $user = new User($email);
-                    $this->entityManager->persist($user);
-                }
-
-                $user->setRoles($this->adminRoleResolver->resolveRoles($email));
+                $user = $this->loginUserResolver->resolveOrCreate($email);
                 $user->setLastLoginAt(new \DateTimeImmutable());
                 $this->entityManager->flush();
 
@@ -217,14 +212,7 @@ final class OtpLoginController extends AbstractController
                     'ip' => $request->getClientIp(),
                 ]);
 
-                /** @var User|null $user */
-                $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
-                if (!$user instanceof User) {
-                    $user = new User($email);
-                    $this->entityManager->persist($user);
-                }
-
-                $user->setRoles($this->adminRoleResolver->resolveRoles($email));
+                $user = $this->loginUserResolver->resolveOrCreate($email);
                 $user->setLastLoginAt(new \DateTimeImmutable());
                 $this->entityManager->flush();
 
@@ -272,21 +260,14 @@ final class OtpLoginController extends AbstractController
             }
 
             $challenge->markAsConsumed();
-            $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
+            if (!$this->allowedEmailChecker->isAllowed($email)) {
+                $this->entityManager->flush();
+                $this->addFlash('error', 'Code invalide ou expire.');
 
-            if (!$user instanceof User) {
-                if (!$this->allowedEmailChecker->isAllowed($email)) {
-                    $this->entityManager->flush();
-                    $this->addFlash('error', 'Code invalide ou expire.');
-
-                    return $this->redirectToRoute('app_auth_verify');
-                }
-
-                $user = new User($email);
-                $this->entityManager->persist($user);
+                return $this->redirectToRoute('app_auth_verify');
             }
 
-            $user->setRoles($this->adminRoleResolver->resolveRoles($email));
+            $user = $this->loginUserResolver->resolveOrCreate($email);
             $user->setLastLoginAt(new \DateTimeImmutable());
             $this->entityManager->flush();
 

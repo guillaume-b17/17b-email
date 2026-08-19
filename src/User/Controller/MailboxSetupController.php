@@ -11,7 +11,7 @@ use App\Sync\Service\AppleMailProfileGenerator;
 use App\Sync\Service\DomainMigrationProvisioner;
 use App\Sync\Service\MailClientSettings;
 use App\Sync\Service\MailboxPasswordGenerator;
-use Doctrine\ORM\EntityManagerInterface;
+use App\User\Service\ManagedMailboxResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,11 +23,11 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 final class MailboxSetupController extends AbstractController
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
         private readonly DomainMigrationProvisioner $domainMigrationProvisioner,
         private readonly AppleMailProfileGenerator $appleMailProfileGenerator,
         private readonly MailClientSettings $mailClientSettings,
         private readonly MailboxPasswordGenerator $mailboxPasswordGenerator,
+        private readonly ManagedMailboxResolver $managedMailboxResolver,
     ) {
     }
 
@@ -35,12 +35,18 @@ final class MailboxSetupController extends AbstractController
     public function index(Request $request): Response
     {
         $user = $this->requireUser();
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->query->get('accountId'));
-        $migration = $this->resolveMigration($user, $emailAccount);
+        $currentAccount = $this->managedMailboxResolver->resolve($user, $request->query->get('accountId'));
+        $setupAccount = $this->managedMailboxResolver->findOwnedTargetAccount(
+            $currentAccount instanceof EmailAccount ? $currentAccount->getOwner() : $user,
+            $currentAccount
+        );
+        $migration = $setupAccount instanceof EmailAccount
+            ? $this->domainMigrationProvisioner->findForEmail($setupAccount->getEmail())
+            : $this->domainMigrationProvisioner->findForEmail($user->getEmail());
         $password = null;
         $passwordError = null;
 
-        if ($migration instanceof MailboxMigration && $migration->isReadyForClientSetup()) {
+        if ($migration instanceof MailboxMigration) {
             try {
                 $password = $this->domainMigrationProvisioner->decryptPassword($migration);
             } catch (\Throwable $exception) {
@@ -49,13 +55,12 @@ final class MailboxSetupController extends AbstractController
         }
 
         return $this->render('user/mailbox_setup.html.twig', [
-            'emailAccount' => $emailAccount,
+            'emailAccount' => $setupAccount,
             'mailboxMigration' => $migration,
             'mailPassword' => $password,
             'passwordError' => $passwordError,
             'mailClientSettings' => $this->mailClientSettings->toArray(),
-            'currentAccountId' => $emailAccount?->getId(),
-            'isAdminContext' => $this->isGranted('ROLE_ADMIN'),
+            'currentAccountId' => $setupAccount?->getId() ?? $currentAccount?->getId(),
         ]);
     }
 
@@ -69,12 +74,15 @@ final class MailboxSetupController extends AbstractController
             return $this->redirectToRoute('app_user_mailbox_setup');
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->request->get('accountId'));
-        $migration = $this->resolveMigration($user, $emailAccount);
-        if (!$migration instanceof MailboxMigration) {
-            $this->addFlash('error', 'Aucun nouveau compte 17b.fr n’est associé à cet utilisateur.');
+        $currentAccount = $this->managedMailboxResolver->resolve($user, $request->request->get('accountId'));
+        $setupAccount = $this->managedMailboxResolver->findOwnedTargetAccount(
+            $currentAccount instanceof EmailAccount ? $currentAccount->getOwner() : $user,
+            $currentAccount
+        );
+        if (!$setupAccount instanceof EmailAccount) {
+            $this->addFlash('error', 'Aucun compte 17b.fr n’est associé à cet utilisateur.');
 
-            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedMailboxResolver->routeParams($currentAccount));
         }
 
         $password = (string) $request->request->get('password', '');
@@ -82,12 +90,12 @@ final class MailboxSetupController extends AbstractController
         if ($password !== $confirmation) {
             $this->addFlash('error', 'Les deux mots de passe ne correspondent pas.');
 
-            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedMailboxResolver->routeParams($setupAccount));
         }
 
         try {
             $this->mailboxPasswordGenerator->assertValid($password);
-            $this->domainMigrationProvisioner->changeClientPassword($migration, $password);
+            $this->domainMigrationProvisioner->changeMailboxPassword($setupAccount, $password);
             $this->addFlash('success', 'Mot de passe du compte 17b.fr mis à jour. Utilisez-le dans votre logiciel de messagerie.');
         } catch (\InvalidArgumentException $exception) {
             $this->addFlash('error', $exception->getMessage());
@@ -95,41 +103,48 @@ final class MailboxSetupController extends AbstractController
             $this->addFlash('error', sprintf('Impossible de changer le mot de passe OVH: %s', $exception->getMessage()));
         }
 
-        return $this->redirectToRoute('app_user_mailbox_setup', $this->managedAccountRouteParams($emailAccount));
+        return $this->redirectToRoute('app_user_mailbox_setup', $this->managedMailboxResolver->routeParams($setupAccount));
     }
 
     #[Route('/apple-mail', name: 'app_user_mailbox_setup_apple', methods: ['GET'])]
     public function appleProfile(Request $request): Response
     {
         $user = $this->requireUser();
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->query->get('accountId'));
-        $migration = $this->resolveMigration($user, $emailAccount);
-        if (!$migration instanceof MailboxMigration || !$migration->isReadyForClientSetup()) {
-            $this->addFlash('error', 'Le profil Apple Mail n’est pas encore disponible.');
+        $currentAccount = $this->managedMailboxResolver->resolve($user, $request->query->get('accountId'));
+        $setupAccount = $this->managedMailboxResolver->findOwnedTargetAccount(
+            $currentAccount instanceof EmailAccount ? $currentAccount->getOwner() : $user,
+            $currentAccount
+        );
+        if (!$setupAccount instanceof EmailAccount) {
+            $this->addFlash('error', 'Aucun compte 17b.fr n’est associé à cet utilisateur.');
 
-            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedMailboxResolver->routeParams($currentAccount));
         }
 
-        try {
-            $password = $this->domainMigrationProvisioner->decryptPassword($migration);
-        } catch (\Throwable) {
-            $password = null;
+        $migration = $this->domainMigrationProvisioner->findForEmail($setupAccount->getEmail());
+        $password = null;
+        if ($migration instanceof MailboxMigration) {
+            try {
+                $password = $this->domainMigrationProvisioner->decryptPassword($migration);
+            } catch (\Throwable) {
+                $password = null;
+            }
         }
 
         if (null === $password || '' === $password) {
-            $this->addFlash('error', 'Le mot de passe du nouveau compte est indisponible. Définissez-en un depuis cette page.');
+            $this->addFlash('error', 'Définissez d’abord un mot de passe pour télécharger le profil Apple Mail.');
 
-            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_mailbox_setup', $this->managedMailboxResolver->routeParams($setupAccount));
         }
 
         $profile = $this->appleMailProfileGenerator->generate(
-            $migration->getTargetEmail(),
+            $setupAccount->getEmail(),
             $password,
-            $user->displayName() ?? $migration->getTargetEmail(),
+            $setupAccount->getOwner()->displayName() ?? $setupAccount->getEmail(),
             $this->mailClientSettings
         );
 
-        $filename = sprintf('%s.mobileconfig', str_replace('@', '-at-', $migration->getTargetEmail()));
+        $filename = sprintf('%s.mobileconfig', str_replace('@', '-at-', $setupAccount->getEmail()));
 
         return new Response($profile, Response::HTTP_OK, [
             'Content-Type' => 'application/x-apple-aspen-config; charset=utf-8',
@@ -145,47 +160,5 @@ final class MailboxSetupController extends AbstractController
         }
 
         return $user;
-    }
-
-    private function resolveManagedEmailAccount(User $user, mixed $rawAccountId): ?EmailAccount
-    {
-        if ($this->isGranted('ROLE_ADMIN') && is_scalar($rawAccountId) && ctype_digit((string) $rawAccountId)) {
-            /** @var EmailAccount|null $adminTargetEmailAccount */
-            $adminTargetEmailAccount = $this->entityManager->getRepository(EmailAccount::class)->find((int) $rawAccountId);
-            if ($adminTargetEmailAccount instanceof EmailAccount) {
-                return $adminTargetEmailAccount;
-            }
-        }
-
-        /** @var EmailAccount|null $emailAccount */
-        $emailAccount = $this->entityManager->getRepository(EmailAccount::class)->findOneBy([
-            'owner' => $user,
-            'email' => $user->getEmail(),
-        ]);
-
-        return $emailAccount;
-    }
-
-    private function resolveMigration(User $user, ?EmailAccount $emailAccount): ?MailboxMigration
-    {
-        $sourceEmail = $emailAccount instanceof EmailAccount ? $emailAccount->getEmail() : $user->getEmail();
-        $migration = $this->domainMigrationProvisioner->findForEmail($sourceEmail);
-        if ($migration instanceof MailboxMigration) {
-            return $migration;
-        }
-
-        return $this->domainMigrationProvisioner->findForEmail($user->getEmail());
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    private function managedAccountRouteParams(?EmailAccount $emailAccount): array
-    {
-        if (!$this->isGranted('ROLE_ADMIN') || !$emailAccount instanceof EmailAccount || null === $emailAccount->getId()) {
-            return [];
-        }
-
-        return ['accountId' => $emailAccount->getId()];
     }
 }

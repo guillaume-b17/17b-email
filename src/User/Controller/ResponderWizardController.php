@@ -10,6 +10,7 @@ use App\Entity\Responder;
 use App\Entity\User;
 use App\Sync\Service\OvhRedirectionManager;
 use App\Sync\Service\OvhResponderManager;
+use App\User\Service\ManagedMailboxResolver;
 use App\User\Service\ResponderMessagePresetProvider;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -30,17 +31,25 @@ final class ResponderWizardController extends AbstractController
         private readonly OvhResponderManager $ovhResponderManager,
         private readonly OvhRedirectionManager $ovhRedirectionManager,
         private readonly ResponderMessagePresetProvider $responderMessagePresetProvider,
+        private readonly ManagedMailboxResolver $managedMailboxResolver,
     ) {
     }
 
     #[Route('', name: 'app_user_wizard_start', methods: ['GET'])]
     public function start(Request $request): Response
     {
+        $user = $this->getUser();
+        if (!$user instanceof User) {
+            throw $this->createAccessDeniedException();
+        }
+
         $session = $request->getSession();
         $session->remove(self::SESSION_KEY);
 
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->query->get('accountId'));
+
         return $this->redirectToRoute('app_user_wizard_step', [
-            ...$this->managedAccountRouteParams($this->resolveManagedEmailAccount($request->query->get('accountId'))),
+            ...$this->managedMailboxResolver->routeParams($emailAccount),
             'step' => 'start_date',
         ]);
     }
@@ -58,7 +67,7 @@ final class ResponderWizardController extends AbstractController
             throw $this->createAccessDeniedException();
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($request->query->get('accountId'));
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->query->get('accountId'));
         if (!$emailAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Synchronisez d’abord votre compte e-mail.');
 
@@ -75,7 +84,7 @@ final class ResponderWizardController extends AbstractController
                 $this->addFlash('error', 'Session expirée, veuillez réessayer.');
 
                 return $this->redirectToRoute('app_user_wizard_step', [
-                    ...$this->managedAccountRouteParams($emailAccount),
+                    ...$this->managedMailboxResolver->routeParams($emailAccount),
                     'step' => $step,
                 ]);
             }
@@ -85,12 +94,12 @@ final class ResponderWizardController extends AbstractController
 
             if (null !== $result['redirectStep']) {
                 return $this->redirectToRoute('app_user_wizard_step', [
-                    ...$this->managedAccountRouteParams($emailAccount),
+                    ...$this->managedMailboxResolver->routeParams($emailAccount),
                     'step' => $result['redirectStep'],
                 ]);
             }
 
-            return $this->redirectToRoute('app_user_account', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_account', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         if ('start_date' === $step && ('' === trim((string) ($data['startsAt'] ?? '')))) {
@@ -118,7 +127,7 @@ final class ResponderWizardController extends AbstractController
             return $this->redirectToRoute('app_user_account');
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($request->request->get('accountId'));
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->request->get('accountId'));
         if (!$emailAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Synchronisez d’abord votre compte e-mail.');
 
@@ -137,7 +146,7 @@ final class ResponderWizardController extends AbstractController
             $this->addFlash('error', 'Le message du répondeur est obligatoire.');
 
             return $this->redirectToRoute('app_user_wizard_step', [
-                ...$this->managedAccountRouteParams($emailAccount),
+                ...$this->managedMailboxResolver->routeParams($emailAccount),
                 'step' => 'message',
             ]);
         }
@@ -161,7 +170,7 @@ final class ResponderWizardController extends AbstractController
             $this->addFlash('error', "Erreur OVH répondeur: {$exception->getMessage()}");
 
             return $this->redirectToRoute('app_user_wizard_step', [
-                ...$this->managedAccountRouteParams($emailAccount),
+                ...$this->managedMailboxResolver->routeParams($emailAccount),
                 'step' => 'review',
             ]);
         }
@@ -189,7 +198,7 @@ final class ResponderWizardController extends AbstractController
                 $this->addFlash('error', 'Adresse de destination invalide.');
 
                 return $this->redirectToRoute('app_user_wizard_step', [
-                    ...$this->managedAccountRouteParams($emailAccount),
+                    ...$this->managedMailboxResolver->routeParams($emailAccount),
                     'step' => 'destination',
                 ]);
             }
@@ -198,7 +207,7 @@ final class ResponderWizardController extends AbstractController
                 $this->addFlash('error', 'La destination doit être différente de votre compte.');
 
                 return $this->redirectToRoute('app_user_wizard_step', [
-                    ...$this->managedAccountRouteParams($emailAccount),
+                    ...$this->managedMailboxResolver->routeParams($emailAccount),
                     'step' => 'destination',
                 ]);
             }
@@ -215,7 +224,7 @@ final class ResponderWizardController extends AbstractController
                 $this->addFlash('error', 'La date de fin de redirection doit être après la date de début.');
 
                 return $this->redirectToRoute('app_user_wizard_step', [
-                    ...$this->managedAccountRouteParams($emailAccount),
+                    ...$this->managedMailboxResolver->routeParams($emailAccount),
                     'step' => 'redirection_dates',
                 ]);
             }
@@ -242,7 +251,7 @@ final class ResponderWizardController extends AbstractController
                 $this->addFlash('error', "Erreur création redirection: {$exception->getMessage()}");
 
                 return $this->redirectToRoute('app_user_wizard_step', [
-                    ...$this->managedAccountRouteParams($emailAccount),
+                    ...$this->managedMailboxResolver->routeParams($emailAccount),
                     'step' => 'review',
                 ]);
             }
@@ -255,7 +264,7 @@ final class ResponderWizardController extends AbstractController
 
         $this->addFlash('success', 'Assistant appliqué : répondeur mis à jour'.($addRedirection ? ' + redirection.' : '.'));
 
-        return $this->redirectToRoute('app_user_account', $this->managedAccountRouteParams($emailAccount));
+        return $this->redirectToRoute('app_user_account', $this->managedMailboxResolver->routeParams($emailAccount));
     }
 
     /**
@@ -448,7 +457,7 @@ final class ResponderWizardController extends AbstractController
      */
     private function buildViewData(EmailAccount $emailAccount, string $step, array $data): array
     {
-        $accountParams = $this->managedAccountRouteParams($emailAccount);
+        $accountParams = $this->managedMailboxResolver->routeParams($emailAccount);
         $previousStep = $this->resolvePreviousStep($step, $data);
 
         return [
@@ -534,42 +543,6 @@ final class ResponderWizardController extends AbstractController
         }
 
         return $date;
-    }
-
-    private function resolveManagedEmailAccount(mixed $rawAccountId): ?EmailAccount
-    {
-        $user = $this->getUser();
-        if (!$user instanceof User) {
-            return null;
-        }
-
-        if ($this->isGranted('ROLE_ADMIN') && is_scalar($rawAccountId) && ctype_digit((string) $rawAccountId)) {
-            /** @var EmailAccount|null $adminTargetEmailAccount */
-            $adminTargetEmailAccount = $this->entityManager->getRepository(EmailAccount::class)->find((int) $rawAccountId);
-            if ($adminTargetEmailAccount instanceof EmailAccount) {
-                return $adminTargetEmailAccount;
-            }
-        }
-
-        /** @var EmailAccount|null $emailAccount */
-        $emailAccount = $this->entityManager->getRepository(EmailAccount::class)->findOneBy([
-            'owner' => $user,
-            'email' => $user->getEmail(),
-        ]);
-
-        return $emailAccount;
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    private function managedAccountRouteParams(?EmailAccount $emailAccount): array
-    {
-        if (!$this->isGranted('ROLE_ADMIN') || !$emailAccount instanceof EmailAccount || null === $emailAccount->getId()) {
-            return [];
-        }
-
-        return ['accountId' => $emailAccount->getId()];
     }
 }
 

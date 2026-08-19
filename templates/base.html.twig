@@ -82,20 +82,26 @@
         {% set hideAppHeader = hideAppHeader is defined and hideAppHeader %}
         {% if app.user and not hideAppHeader %}
             <header class="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 lg:px-8">
-                <div class="ui-card">
+                <div class="ui-card space-y-3">
                     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <p class="text-xs uppercase tracking-wide text-slate-400">Compte connecté</p>
                             <p class="text-lg font-semibold">{{ app.user.userIdentifier }}</p>
+                            {% set currentMailbox = current_mailbox() %}
+                            {% if currentMailbox %}
+                                <p class="text-sm text-slate-300">Boîte gérée : {{ currentMailbox.email }}</p>
+                            {% endif %}
                         </div>
                         <div class="flex flex-wrap gap-2" data-tour="nav">
-                            {% set accountParams = is_granted('ROLE_ADMIN') and currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : {} %}
+                            {% set accountParams = mailbox_route_params() %}
+                            {% set setupParams = mailbox_route_params(target_mailbox()) %}
+                            {% set switchableRoutes = ['app_user_account', 'app_user_responder_edit', 'app_user_redirections', 'app_user_mailbox_setup'] %}
                             {% if is_granted('ROLE_ADMIN') %}
                                 <a class="ui-button-secondary" href="{{ path('app_admin_accounts') }}">Comptes (admin)</a>
-                                <a class="ui-button-secondary" href="{{ path('app_admin_domain_migration') }}">Créer comptes 17b.fr</a>
+                                <a class="ui-button-secondary" href="{{ path('app_admin_domain_migration') }}">Comptes 17b.fr</a>
                             {% endif %}
                             <a class="ui-button-secondary" href="{{ path('app_user_account', accountParams) }}">Compte</a>
-                            <a class="ui-button-secondary" href="{{ path('app_user_mailbox_setup', accountParams) }}">Compte 17b.fr</a>
+                            <a class="ui-button-secondary" href="{{ path('app_user_mailbox_setup', setupParams) }}">Installation 17b.fr</a>
                             <a class="ui-button-secondary" href="{{ path('app_user_responder_edit', accountParams) }}">Répondeur</a>
                             <a class="ui-button-secondary" href="{{ path('app_user_redirections', accountParams) }}">Redirections</a>
                             <form method="post" action="{{ path('_logout_main') }}">
@@ -106,6 +112,20 @@
                             </button>
                         </div>
                     </div>
+                    {% set ownedMailboxes = owned_mailboxes() %}
+                    {% if ownedMailboxes|length > 1 %}
+                        <div class="flex flex-wrap gap-2 border-t border-slate-800 pt-3">
+                            <p class="w-full text-xs uppercase tracking-wide text-slate-400">Choisir la boîte à gérer</p>
+                            {% set switchRoute = app.request.attributes.get('_route') in switchableRoutes ? app.request.attributes.get('_route') : 'app_user_account' %}
+                            {% for mailbox in ownedMailboxes %}
+                                {% set isCurrent = currentMailbox and currentMailbox.id == mailbox.id %}
+                                <a
+                                    class="{{ isCurrent ? 'ui-button-primary' : 'ui-button-secondary' }}"
+                                    href="{{ path(switchRoute, mailbox_route_params(mailbox)) }}"
+                                >{{ mailbox.email }}</a>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
                 </div>
             </header>
         {% endif %}

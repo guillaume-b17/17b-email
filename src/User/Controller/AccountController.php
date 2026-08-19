@@ -15,6 +15,7 @@ use App\Sync\Service\OvhResponderManager;
 use App\Sync\Service\RedirectionSelfCopyCleaner;
 use App\Sync\Service\UserRedirectionSynchronizer;
 use App\Sync\Service\UserMailboxSynchronizer;
+use App\User\Service\ManagedMailboxResolver;
 use App\User\Service\ResponderMessagePresetProvider;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -38,6 +39,7 @@ final class AccountController extends AbstractController
         private readonly ResponderMessagePresetProvider $responderMessagePresetProvider,
         private readonly RedirectionSelfCopyCleaner $redirectionSelfCopyCleaner,
         private readonly DomainMigrationProvisioner $domainMigrationProvisioner,
+        private readonly ManagedMailboxResolver $managedMailboxResolver,
     ) {
     }
 
@@ -49,7 +51,7 @@ final class AccountController extends AbstractController
             throw $this->createAccessDeniedException();
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->query->get('accountId'));
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->query->get('accountId'));
         $syncError = null;
         if ('1' === $request->query->get('sync') && $emailAccount instanceof EmailAccount) {
             try {
@@ -133,11 +135,17 @@ final class AccountController extends AbstractController
             'responderSyncReport' => $responderSyncReport,
             'redirectionSummary' => $redirectionSummary,
             'currentAccountId' => $emailAccount?->getId(),
-            'isAdminContext' => $this->isGranted('ROLE_ADMIN'),
             'agencyPhone' => $this->responderMessagePresetProvider->phoneNumber(),
             'syncError' => $syncError,
             'hasSelfCopyRedirection' => $hasSelfCopyRedirection,
             'mailboxMigration' => $this->resolveMailboxMigration($user, $emailAccount),
+            'ownedMailboxes' => $emailAccount instanceof EmailAccount
+                ? $this->managedMailboxResolver->listOwned($emailAccount->getOwner())
+                : $this->managedMailboxResolver->listOwned($user),
+            'targetMailbox' => $this->managedMailboxResolver->findOwnedTargetAccount(
+                $emailAccount instanceof EmailAccount ? $emailAccount->getOwner() : $user,
+                $emailAccount
+            ),
         ]);
     }
 
@@ -149,7 +157,7 @@ final class AccountController extends AbstractController
             throw $this->createAccessDeniedException();
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->query->get('accountId'));
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->query->get('accountId'));
         if (!$emailAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Synchronisez d’abord votre compte e-mail.');
 
@@ -195,7 +203,6 @@ final class AccountController extends AbstractController
             'outgoingRedirections' => $outgoingRedirections,
             'incomingRedirections' => $incomingRedirections,
             'currentAccountId' => $emailAccount->getId(),
-            'isAdminContext' => $this->isGranted('ROLE_ADMIN'),
         ]);
     }
 
@@ -207,7 +214,7 @@ final class AccountController extends AbstractController
             throw $this->createAccessDeniedException();
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->query->get('accountId'));
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->query->get('accountId'));
         if (!$emailAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Synchronisez d’abord votre compte e-mail.');
 
@@ -227,7 +234,6 @@ final class AccountController extends AbstractController
             'messagePresets' => $this->responderMessagePresetProvider->all(),
             'agencyPhone' => $this->responderMessagePresetProvider->phoneNumber(),
             'currentAccountId' => $emailAccount->getId(),
-            'isAdminContext' => $this->isGranted('ROLE_ADMIN'),
         ]);
     }
 
@@ -245,7 +251,7 @@ final class AccountController extends AbstractController
             return $this->redirectToRoute('app_user_responder_edit');
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->request->get('accountId'));
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->request->get('accountId'));
         if (!$emailAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Synchronisez d’abord votre compte e-mail.');
 
@@ -267,31 +273,31 @@ final class AccountController extends AbstractController
         if ('' !== trim($rawStartsAt) && !$startsAt instanceof \DateTimeImmutable) {
             $this->addFlash('error', 'La date de début est invalide.');
 
-            return $this->redirectToRoute('app_user_responder_edit', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_responder_edit', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         if ('' !== trim($rawEndsAt) && !$endsAt instanceof \DateTimeImmutable) {
             $this->addFlash('error', 'La date de fin est invalide.');
 
-            return $this->redirectToRoute('app_user_responder_edit', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_responder_edit', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         if ('' === $message) {
             $this->addFlash('error', 'Le message du répondeur est obligatoire.');
 
-            return $this->redirectToRoute('app_user_responder_edit', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_responder_edit', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         if ('' !== $presetKey && !$this->responderMessagePresetProvider->has($presetKey)) {
             $this->addFlash('error', 'Le format de message sélectionné est invalide.');
 
-            return $this->redirectToRoute('app_user_responder_edit', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_responder_edit', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         if ($startsAt instanceof \DateTimeImmutable && $endsAt instanceof \DateTimeImmutable && $startsAt > $endsAt) {
             $this->addFlash('error', 'La date de fin doit être après la date de début.');
 
-            return $this->redirectToRoute('app_user_responder_edit', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_responder_edit', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         if ($startsAt instanceof \DateTimeImmutable && $startsAt < $now) {
@@ -321,7 +327,7 @@ final class AccountController extends AbstractController
         } catch (\Throwable $exception) {
             $this->addFlash('error', "Erreur OVH répondeur: {$exception->getMessage()}");
 
-            return $this->redirectToRoute('app_user_responder_edit', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_responder_edit', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         /** @var Responder|null $responder */
@@ -345,7 +351,7 @@ final class AccountController extends AbstractController
         $this->entityManager->flush();
         $this->addFlash('success', 'Répondeur enregistré.');
 
-        return $this->redirectToRoute('app_user_responder_edit', $this->managedAccountRouteParams($emailAccount));
+        return $this->redirectToRoute('app_user_responder_edit', $this->managedMailboxResolver->routeParams($emailAccount));
     }
 
     #[Route('/repondeur/supprimer', name: 'app_user_responder_delete', methods: ['POST'])]
@@ -362,7 +368,7 @@ final class AccountController extends AbstractController
             return $this->redirectToRoute('app_user_account');
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->request->get('accountId'));
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->request->get('accountId'));
         if (!$emailAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Aucun compte e-mail trouvé pour la suppression.');
 
@@ -374,7 +380,7 @@ final class AccountController extends AbstractController
         } catch (\Throwable $exception) {
             $this->addFlash('error', "Erreur OVH suppression: {$exception->getMessage()}");
 
-            return $this->redirectToRoute('app_user_responder_edit', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_responder_edit', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         /** @var Responder|null $responder */
@@ -389,7 +395,7 @@ final class AccountController extends AbstractController
 
         $this->addFlash('success', 'Répondeur supprimé.');
 
-        return $this->redirectToRoute('app_user_responder_edit', $this->managedAccountRouteParams($emailAccount));
+        return $this->redirectToRoute('app_user_responder_edit', $this->managedMailboxResolver->routeParams($emailAccount));
     }
 
     #[Route('/redirections/creer', name: 'app_user_redirection_create', methods: ['POST'])]
@@ -406,7 +412,7 @@ final class AccountController extends AbstractController
             return $this->redirectToRoute('app_user_redirections');
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->request->get('accountId'));
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->request->get('accountId'));
         if (!$emailAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Synchronisez d’abord votre compte e-mail.');
 
@@ -421,25 +427,25 @@ final class AccountController extends AbstractController
         if ($startsAt instanceof \DateTimeImmutable && $endsAt instanceof \DateTimeImmutable && $startsAt > $endsAt) {
             $this->addFlash('error', 'La date de fin doit être après la date de début.');
 
-            return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_redirections', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         $now = new \DateTimeImmutable('now', new \DateTimeZone(self::APP_TIMEZONE));
         if ($endsAt instanceof \DateTimeImmutable && $endsAt < $now) {
             $this->addFlash('error', 'La date de fin est déjà passée.');
 
-            return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_redirections', $this->managedMailboxResolver->routeParams($emailAccount));
         }
         if (!filter_var($destinationEmail, FILTER_VALIDATE_EMAIL)) {
             $this->addFlash('error', 'Adresse de destination invalide.');
 
-            return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_redirections', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         if ($destinationEmail === $emailAccount->getEmail()) {
             $this->addFlash('error', 'La destination doit être différente de votre compte.');
 
-            return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_redirections', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         try {
@@ -467,7 +473,7 @@ final class AccountController extends AbstractController
             $this->addFlash('error', "Erreur création redirection: {$exception->getMessage()}");
         }
 
-        return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+        return $this->redirectToRoute('app_user_redirections', $this->managedMailboxResolver->routeParams($emailAccount));
     }
 
     #[Route('/redirections/{id}/modifier', name: 'app_user_redirection_update', methods: ['POST'])]
@@ -484,7 +490,7 @@ final class AccountController extends AbstractController
             return $this->redirectToRoute('app_user_redirections');
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->request->get('accountId'));
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->request->get('accountId'));
         if (!$emailAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Synchronisez d’abord votre compte e-mail.');
 
@@ -508,18 +514,18 @@ final class AccountController extends AbstractController
         if ($startsAt instanceof \DateTimeImmutable && $endsAt instanceof \DateTimeImmutable && $startsAt > $endsAt) {
             $this->addFlash('error', 'La date de fin doit être après la date de début.');
 
-            return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_redirections', $this->managedMailboxResolver->routeParams($emailAccount));
         }
         if (!filter_var($destinationEmail, FILTER_VALIDATE_EMAIL)) {
             $this->addFlash('error', 'Adresse de destination invalide.');
 
-            return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_redirections', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         if ($destinationEmail === $emailAccount->getEmail()) {
             $this->addFlash('error', 'La destination doit être différente de votre compte.');
 
-            return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+            return $this->redirectToRoute('app_user_redirections', $this->managedMailboxResolver->routeParams($emailAccount));
         }
 
         try {
@@ -538,7 +544,7 @@ final class AccountController extends AbstractController
             $this->addFlash('error', "Erreur modification redirection: {$exception->getMessage()}");
         }
 
-        return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
+        return $this->redirectToRoute('app_user_redirections', $this->managedMailboxResolver->routeParams($emailAccount));
     }
 
     #[Route('/redirections/{id}/supprimer', name: 'app_user_redirection_delete', methods: ['POST'])]
@@ -555,7 +561,7 @@ final class AccountController extends AbstractController
             return $this->redirectToRoute('app_user_redirections');
         }
 
-        $emailAccount = $this->resolveManagedEmailAccount($user, $request->request->get('accountId'));
+        $emailAccount = $this->managedMailboxResolver->resolve($user, $request->request->get('accountId'));
         if (!$emailAccount instanceof EmailAccount) {
             $this->addFlash('error', 'Synchronisez d’abord votre compte e-mail.');
 
@@ -586,26 +592,7 @@ final class AccountController extends AbstractController
             $this->addFlash('error', "Erreur suppression redirection: {$exception->getMessage()}");
         }
 
-        return $this->redirectToRoute('app_user_redirections', $this->managedAccountRouteParams($emailAccount));
-    }
-
-    private function resolveManagedEmailAccount(User $user, mixed $rawAccountId): ?EmailAccount
-    {
-        if ($this->isGranted('ROLE_ADMIN') && is_scalar($rawAccountId) && ctype_digit((string) $rawAccountId)) {
-            /** @var EmailAccount|null $adminTargetEmailAccount */
-            $adminTargetEmailAccount = $this->entityManager->getRepository(EmailAccount::class)->find((int) $rawAccountId);
-            if ($adminTargetEmailAccount instanceof EmailAccount) {
-                return $adminTargetEmailAccount;
-            }
-        }
-
-        /** @var EmailAccount|null $emailAccount */
-        $emailAccount = $this->entityManager->getRepository(EmailAccount::class)->findOneBy([
-            'owner' => $user,
-            'email' => $user->getEmail(),
-        ]);
-
-        return $emailAccount;
+        return $this->redirectToRoute('app_user_redirections', $this->managedMailboxResolver->routeParams($emailAccount));
     }
 
     private function resolveMailboxMigration(User $user, ?EmailAccount $emailAccount): ?MailboxMigration
@@ -617,18 +604,6 @@ final class AccountController extends AbstractController
         }
 
         return $this->domainMigrationProvisioner->findForEmail($user->getEmail());
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    private function managedAccountRouteParams(?EmailAccount $emailAccount): array
-    {
-        if (!$this->isGranted('ROLE_ADMIN') || !$emailAccount instanceof EmailAccount || null === $emailAccount->getId()) {
-            return [];
-        }
-
-        return ['accountId' => $emailAccount->getId()];
     }
 
     private function parseDateTime(string $rawDateTime): ?\DateTimeImmutable

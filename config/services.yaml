@@ -47,6 +47,11 @@ services:
             $migrationSourceDomain: '%env(string:APP_MIGRATION_SOURCE_DOMAIN)%'
             $migrationTargetDomain: '%env(string:APP_MIGRATION_TARGET_DOMAIN)%'
 
+    App\Sync\Service\UserMailboxSynchronizer:
+        arguments:
+            $migrationSourceDomain: '%env(string:APP_MIGRATION_SOURCE_DOMAIN)%'
+            $migrationTargetDomain: '%env(string:APP_MIGRATION_TARGET_DOMAIN)%'
+
     App\Sync\Service\MailboxPasswordCipher:
         arguments:
             $appSecret: '%kernel.secret%'
@@ -57,6 +62,15 @@ services:
             $imapPort: '%env(int:MAIL_IMAP_PORT)%'
             $smtpHost: '%env(string:MAIL_SMTP_HOST)%'
             $smtpPort: '%env(int:MAIL_SMTP_PORT)%'
+
+    App\User\Service\ManagedMailboxResolver:
+        arguments:
+            $targetDomain: '%env(string:APP_MIGRATION_TARGET_DOMAIN)%'
+
+    App\Security\Service\LoginUserResolver:
+        arguments:
+            $migrationSourceDomain: '%env(string:APP_MIGRATION_SOURCE_DOMAIN)%'
+            $migrationTargetDomain: '%env(string:APP_MIGRATION_TARGET_DOMAIN)%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

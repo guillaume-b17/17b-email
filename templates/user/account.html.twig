@@ -3,7 +3,7 @@
 {% block title %}Mon compte e-mail{% endblock %}
 
 {% block body %}
-    {% set accountParams = isAdminContext is defined and isAdminContext and currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : {} %}
+    {% set accountParams = currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : mailbox_route_params() %}
     <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
         <section class="ui-card space-y-4">
             {% for message in app.flashes('success') %}
@@ -38,7 +38,18 @@
                 } %}
             {% endif %}
 
-            {% if mailboxMigration is defined and mailboxMigration %}
+            {% if targetMailbox is defined and targetMailbox %}
+                <article class="rounded-lg border border-indigo-500/40 bg-indigo-500/10 p-4">
+                    <p class="text-sm font-semibold text-indigo-100">Nouveau compte {{ targetMailbox.email }}</p>
+                    <p class="mt-1 text-sm text-slate-300">Votre adresse @b17.fr reste active. Ajoutez le compte 17b.fr dans Outlook, Apple Mail ou Thunderbird, puis gérez son répondeur et ses redirections ici.</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <a class="ui-button-primary inline-flex" href="{{ path('app_user_mailbox_setup', { accountId: targetMailbox.id }) }}">Configurer ma messagerie</a>
+                        {% if emailAccount is null or emailAccount.id != targetMailbox.id %}
+                            <a class="ui-button-secondary inline-flex" href="{{ path('app_user_account', { accountId: targetMailbox.id }) }}">Gérer @17b.fr</a>
+                        {% endif %}
+                    </div>
+                </article>
+            {% elseif mailboxMigration is defined and mailboxMigration %}
                 <article class="rounded-lg border border-indigo-500/40 bg-indigo-500/10 p-4">
                     <p class="text-sm font-semibold text-indigo-100">Nouveau compte {{ mailboxMigration.targetEmail }}</p>
                     <p class="mt-1 text-sm text-slate-300">Votre adresse @b17.fr reste active. Ajoutez le compte 17b.fr dans Outlook, Apple Mail ou Thunderbird.</p>
@@ -46,6 +57,35 @@
                 </article>
             {% endif %}
         </section>
+
+        {% if ownedMailboxes is defined and ownedMailboxes|length > 1 %}
+            <section class="ui-card space-y-4">
+                <div>
+                    <h2 class="text-xl font-semibold">Vos boîtes</h2>
+                    <p class="mt-1 text-sm text-slate-300">Chaque adresse a son propre répondeur, ses redirections et, pour @17b.fr, son installation messagerie.</p>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    {% for mailbox in ownedMailboxes %}
+                        {% set isCurrent = emailAccount and emailAccount.id == mailbox.id %}
+                        {% set isTarget = targetMailbox is defined and targetMailbox and mailbox.domain == targetMailbox.domain %}
+                        <article class="rounded-lg border {{ isCurrent ? 'border-indigo-500/40 bg-indigo-500/10' : 'border-slate-800 bg-slate-950/40' }} p-4">
+                            <p class="font-medium text-slate-100">{{ mailbox.email }}</p>
+                            {% if isCurrent %}
+                                <p class="mt-1 text-xs text-indigo-200">Boîte affichée ci-dessous</p>
+                            {% endif %}
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <a class="ui-button-secondary text-xs" href="{{ path('app_user_account', { accountId: mailbox.id }) }}">Gérer</a>
+                                <a class="ui-button-secondary text-xs" href="{{ path('app_user_responder_edit', { accountId: mailbox.id }) }}">Répondeur</a>
+                                <a class="ui-button-secondary text-xs" href="{{ path('app_user_redirections', { accountId: mailbox.id }) }}">Redirections</a>
+                                {% if isTarget %}
+                                    <a class="ui-button-primary text-xs" href="{{ path('app_user_mailbox_setup', { accountId: mailbox.id }) }}">Installation</a>
+                                {% endif %}
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
 
         {% if emailAccount %}
             <section class="flex flex-col gap-6">

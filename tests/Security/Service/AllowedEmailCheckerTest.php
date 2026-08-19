@@ -11,9 +11,10 @@ final class AllowedEmailCheckerTest extends TestCase
 {
     public function testAcceptsConfiguredDomain(): void
     {
-        $checker = new AllowedEmailChecker(['b17.fr', 'izardcom.fr'], []);
+        $checker = new AllowedEmailChecker(['b17.fr', 'izardcom.fr', '17b.fr'], []);
 
         self::assertTrue($checker->isAllowed('user@b17.fr'));
+        self::assertTrue($checker->isAllowed('user@17b.fr'));
     }
 
     public function testAcceptsAdminEmailOutsideDomains(): void

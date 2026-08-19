@@ -15,22 +15,55 @@ final class UserMailboxSynchronizer
         private readonly EntityManagerInterface $entityManager,
         private readonly OvhApiClient $ovhApiClient,
         private readonly LoggerInterface $logger,
+        private readonly string $migrationSourceDomain,
+        private readonly string $migrationTargetDomain,
     ) {
     }
 
     public function synchronize(User $user): ?EmailAccount
     {
+        $primary = $this->synchronizeEmail($user, $user->getEmail());
+
+        foreach ($user->getEmailAccounts() as $emailAccount) {
+            if ($emailAccount->getEmail() === mb_strtolower($user->getEmail())) {
+                continue;
+            }
+
+            $this->synchronizeEmail($user, $emailAccount->getEmail());
+        }
+
+        $this->attachMatchingTargetAccount($user);
+
+        return $primary;
+    }
+
+    private function attachMatchingTargetAccount(User $user): void
+    {
+        $sourceDomain = mb_strtolower(trim($this->migrationSourceDomain));
+        $targetDomain = mb_strtolower(trim($this->migrationTargetDomain));
         $userEmail = mb_strtolower($user->getEmail());
-        if (!str_contains($userEmail, '@')) {
+        if ('' === $targetDomain || !str_ends_with($userEmail, '@'.$sourceDomain)) {
+            return;
+        }
+
+        [$localPart] = explode('@', $userEmail, 2);
+        $targetEmail = sprintf('%s@%s', $localPart, $targetDomain);
+        $this->synchronizeEmail($user, $targetEmail);
+    }
+
+    private function synchronizeEmail(User $user, string $email): ?EmailAccount
+    {
+        $email = mb_strtolower(trim($email));
+        if (!str_contains($email, '@')) {
             return null;
         }
 
-        [$localPart, $domain] = explode('@', $userEmail, 2);
+        [$localPart, $domain] = explode('@', $email, 2);
         $remoteAccount = $this->ovhApiClient->fetchEmailAccount($domain, $localPart);
 
         if (null === $remoteAccount) {
-            $this->logger->warning('Compte e-mail introuvable sur OVH', [
-                'email' => $userEmail,
+            $this->logger->info('Compte e-mail introuvable sur OVH', [
+                'email' => $email,
                 'domain' => $domain,
             ]);
 
@@ -39,26 +72,26 @@ final class UserMailboxSynchronizer
 
         /** @var EmailAccount|null $emailAccount */
         $emailAccount = $this->entityManager->getRepository(EmailAccount::class)->findOneBy([
-            'email' => $userEmail,
+            'email' => $email,
         ]);
 
         if (!$emailAccount instanceof EmailAccount) {
-            $emailAccount = new EmailAccount($user, $userEmail, $domain);
+            $emailAccount = new EmailAccount($user, $email, $domain);
             $this->entityManager->persist($emailAccount);
         }
 
         $emailAccount
             ->setOwner($user)
             ->setLabel($this->extractString($remoteAccount, ['description', 'displayName', 'accountName']))
-            ->setQuotaMb($this->extractMegaBytes($remoteAccount, ['quota', 'maxSize']))
+            ->setQuotaMb($this->extractMegaBytes($remoteAccount, ['quota', 'maxSize', 'size']))
             ->setUsageMb($this->extractMegaBytes($remoteAccount, ['used', 'currentUsage']))
-            ->setOvhIdentifier($this->extractString($remoteAccount, ['accountName', 'login']))
+            ->setOvhIdentifier($this->extractString($remoteAccount, ['accountName', 'login']) ?? $localPart)
             ->setSyncedAt(new \DateTimeImmutable());
 
         $this->entityManager->flush();
 
         $this->logger->info('Synchronisation utilisateur réussie', [
-            'email' => $userEmail,
+            'email' => $email,
             'quotaMb' => $emailAccount->getQuotaMb(),
             'usageMb' => $emailAccount->getUsageMb(),
         ]);

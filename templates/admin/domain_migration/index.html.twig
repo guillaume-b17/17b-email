@@ -1,17 +1,17 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Créer les comptes 17b.fr{% endblock %}
+{% block title %}Gérer les comptes 17b.fr{% endblock %}
 
 {% block body %}
     <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
         <section class="ui-card space-y-4">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h1 class="text-2xl font-semibold">Créer les comptes @{{ targetDomain }}</h1>
+                    <h1 class="text-2xl font-semibold">Gérer les comptes @{{ targetDomain }}</h1>
                     <p class="mt-2 text-sm text-slate-300">
-                        Ce site sert à gérer les répondeurs et redirections. En tant qu’admin, vous créez ici les nouvelles boîtes
-                        <span class="font-mono">@{{ targetDomain }}</span> à partir des comptes
-                        <span class="font-mono">@{{ sourceDomain }}</span>. Les collaborateurs conservent l’ancien compte et ajoutent le nouveau dans leur messagerie.
+                        Créez les boîtes <span class="font-mono">@{{ targetDomain }}</span> à partir des comptes
+                        <span class="font-mono">@{{ sourceDomain }}</span>, puis ouvrez-les pour les installer ou les gérer
+                        (répondeur, redirections). Les collaborateurs voient les mêmes actions dans leur espace.
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -75,6 +75,7 @@
                                 <th class="px-3 py-2 text-left font-medium">OVH</th>
                                 <th class="px-3 py-2 text-left font-medium">Quota</th>
                                 <th class="px-3 py-2 text-left font-medium">Mot de passe</th>
+                                <th class="px-3 py-2 text-left font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="target-rows" class="divide-y divide-slate-800 bg-slate-950/40">
@@ -100,6 +101,16 @@
                                             </div>
                                         {% else %}
                                             <span class="text-slate-500">Inconnu</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        {% if account.accountId %}
+                                            <div class="flex flex-wrap gap-2">
+                                                <a class="ui-button-secondary text-xs" href="{{ path('app_user_account', { accountId: account.accountId }) }}">Gérer</a>
+                                                <a class="ui-button-primary text-xs" href="{{ path('app_user_mailbox_setup', { accountId: account.accountId }) }}">Installer</a>
+                                            </div>
+                                        {% else %}
+                                            <span class="text-xs text-slate-500">Synchroniser pour ouvrir</span>
                                         {% endif %}
                                     </td>
                                 </tr>

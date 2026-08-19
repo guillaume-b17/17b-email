@@ -3,7 +3,7 @@
 {% block title %}Configurer le compte 17b.fr{% endblock %}
 
 {% block body %}
-    {% set accountParams = isAdminContext is defined and isAdminContext and currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : {} %}
+    {% set accountParams = currentAccountId is defined and currentAccountId ? { accountId: currentAccountId } : mailbox_route_params() %}
     <main id="contenu-principal" class="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-12 sm:px-6 lg:px-8">
         <section class="ui-card space-y-4">
             {% for message in app.flashes('success') %}
@@ -37,19 +37,24 @@
             </div>
         </section>
 
-        {% if mailboxMigration is null %}
+        {% set targetEmail = emailAccount ? emailAccount.email : (mailboxMigration ? mailboxMigration.targetEmail : null) %}
+        {% set sourceEmail = mailboxMigration ? mailboxMigration.sourceEmail : app.user.userIdentifier %}
+        {% set canSetup = targetEmail is not null %}
+        {% set canChangePassword = emailAccount is not null %}
+
+        {% if not canSetup %}
             {% include 'components/ui/alert.html.twig' with {
                 tone: 'info',
                 title: 'Compte pas encore créé',
                 message: 'Le compte 17b.fr n’est pas encore provisionné pour cette adresse. Contactez un administrateur.'
             } %}
-        {% elseif mailboxMigration.status == 'skipped' %}
+        {% elseif mailboxMigration and mailboxMigration.status == 'skipped' %}
             {% include 'components/ui/alert.html.twig' with {
                 tone: 'warning',
                 title: 'Compte déjà présent chez OVH',
-                message: mailboxMigration.lastError ?: 'Le mot de passe n’a pas été enregistré. Un administrateur doit relancer la création avec --force, ou définissez un mot de passe ci-dessous si le compte existe.'
+                message: mailboxMigration.lastError ?: 'Le mot de passe n’a pas été enregistré. Un administrateur peut le réinitialiser, ou définissez-en un ci-dessous.'
             } %}
-        {% elseif mailboxMigration.status == 'error' %}
+        {% elseif mailboxMigration and mailboxMigration.status == 'error' %}
             {% include 'components/ui/alert.html.twig' with {
                 tone: 'danger',
                 title: 'Création incomplète',
@@ -57,17 +62,17 @@
             } %}
         {% endif %}
 
-        {% if mailboxMigration %}
+        {% if canSetup %}
             <section class="ui-card space-y-4">
                 <h2 class="text-xl font-semibold">Identifiants</h2>
                 <dl class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <dt class="text-xs uppercase tracking-wide text-slate-400">Ancienne adresse</dt>
-                        <dd class="mt-1 font-medium">{{ mailboxMigration.sourceEmail }}</dd>
+                        <dd class="mt-1 font-medium">{{ sourceEmail }}</dd>
                     </div>
                     <div>
                         <dt class="text-xs uppercase tracking-wide text-slate-400">Nouvelle adresse</dt>
-                        <dd class="mt-1 font-medium">{{ mailboxMigration.targetEmail }}</dd>
+                        <dd class="mt-1 font-medium">{{ targetEmail }}</dd>
                     </div>
                     <div class="sm:col-span-2">
                         <dt class="text-xs uppercase tracking-wide text-slate-400">Mot de passe</dt>
@@ -83,7 +88,7 @@
                                 <button type="button" class="ui-button-secondary" data-toggle-password="mail-password">Afficher</button>
                                 <button type="button" class="ui-button-primary" data-copy="#mail-password">Copier</button>
                             {% else %}
-                                <span class="text-sm text-slate-300">Aucun mot de passe enregistré. Définissez-en un ci-dessous.</span>
+                                <span class="text-sm text-slate-300">Aucun mot de passe enregistré. Définissez-en un ci-dessous pour l’ajouter dans votre logiciel de messagerie.</span>
                             {% endif %}
                         </dd>
                     </div>
@@ -92,7 +97,7 @@
 
             <section class="ui-card space-y-4">
                 <h2 class="text-xl font-semibold">Paramètres serveur</h2>
-                <p class="text-sm text-slate-300">Nom d’utilisateur: l’adresse complète <strong>{{ mailboxMigration.targetEmail }}</strong></p>
+                <p class="text-sm text-slate-300">Nom d’utilisateur: l’adresse complète <strong>{{ targetEmail }}</strong></p>
                 <dl class="grid gap-4 sm:grid-cols-2">
                     <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
                         <dt class="text-xs uppercase tracking-wide text-slate-400">Réception IMAP</dt>
@@ -116,7 +121,7 @@
             <section class="ui-card space-y-4">
                 <h2 class="text-xl font-semibold">Ajouter le compte automatiquement</h2>
                 <p class="text-sm text-slate-300">Sur iPhone, iPad ou Mac, téléchargez le profil: il préremplit serveur, identifiant et mot de passe.</p>
-                {% if mailboxMigration.readyForClientSetup and mailPassword %}
+                {% if mailPassword %}
                     <a class="ui-button-primary inline-flex" href="{{ path('app_user_mailbox_setup_apple', accountParams) }}">Télécharger le profil Apple Mail</a>
                 {% else %}
                     <p class="text-sm text-slate-400">Le profil Apple sera disponible dès qu’un mot de passe est enregistré.</p>
@@ -127,7 +132,7 @@
                 <h2 class="text-xl font-semibold">Outlook, Thunderbird et les autres</h2>
                 <ol class="list-decimal space-y-2 pl-5 text-sm text-slate-300">
                     <li>Ajoutez un compte IMAP (pas Exchange, pas POP).</li>
-                    <li>Adresse e-mail: <span class="font-mono text-slate-100">{{ mailboxMigration.targetEmail }}</span></li>
+                    <li>Adresse e-mail: <span class="font-mono text-slate-100">{{ targetEmail }}</span></li>
                     <li>Mot de passe: celui affiché ci-dessus (ou celui que vous définissez).</li>
                     <li>Serveur de réception: <span class="font-mono text-slate-100">{{ mailClientSettings.imapHost }}</span> / {{ mailClientSettings.imapPort }} / SSL</li>
                     <li>Serveur d’envoi: <span class="font-mono text-slate-100">{{ mailClientSettings.smtpHost }}</span> / {{ mailClientSettings.smtpPort }} / SSL</li>
@@ -135,27 +140,29 @@
                 </ol>
             </section>
 
-            <section class="ui-card space-y-4">
-                <h2 class="text-xl font-semibold">Choisir un mot de passe</h2>
-                <p class="text-sm text-slate-300">Entre 9 et 30 caractères, avec majuscule, minuscule, chiffre et caractère spécial. OVH refuse les accents.</p>
-                <form method="post" action="{{ path('app_user_mailbox_setup_password') }}" class="space-y-3">
-                    <input type="hidden" name="_token" value="{{ csrf_token('mailbox_setup_password') }}">
-                    {% if currentAccountId %}
-                        <input type="hidden" name="accountId" value="{{ currentAccountId }}">
-                    {% endif %}
-                    <div class="grid gap-3 sm:grid-cols-2">
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-200">Nouveau mot de passe</span>
-                            <input type="password" name="password" required minlength="9" maxlength="30" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
-                        </label>
-                        <label class="block text-sm">
-                            <span class="mb-1 block text-slate-200">Confirmation</span>
-                            <input type="password" name="passwordConfirmation" required minlength="9" maxlength="30" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
-                        </label>
-                    </div>
-                    <button type="submit" class="ui-button-primary">Enregistrer le mot de passe</button>
-                </form>
-            </section>
+            {% if canChangePassword %}
+                <section class="ui-card space-y-4">
+                    <h2 class="text-xl font-semibold">Choisir un mot de passe</h2>
+                    <p class="text-sm text-slate-300">Entre 9 et 30 caractères, avec majuscule, minuscule, chiffre et caractère spécial. OVH refuse les accents.</p>
+                    <form method="post" action="{{ path('app_user_mailbox_setup_password') }}" class="space-y-3">
+                        <input type="hidden" name="_token" value="{{ csrf_token('mailbox_setup_password') }}">
+                        {% if currentAccountId %}
+                            <input type="hidden" name="accountId" value="{{ currentAccountId }}">
+                        {% endif %}
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <label class="block text-sm">
+                                <span class="mb-1 block text-slate-200">Nouveau mot de passe</span>
+                                <input type="password" name="password" required minlength="9" maxlength="30" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
+                            </label>
+                            <label class="block text-sm">
+                                <span class="mb-1 block text-slate-200">Confirmation</span>
+                                <input type="password" name="passwordConfirmation" required minlength="9" maxlength="30" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
+                            </label>
+                        </div>
+                        <button type="submit" class="ui-button-primary">Enregistrer le mot de passe</button>
+                    </form>
+                </section>
+            {% endif %}
         {% endif %}
     </main>
 {% endblock %}
