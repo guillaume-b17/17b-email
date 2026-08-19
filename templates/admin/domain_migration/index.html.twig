@@ -123,7 +123,7 @@
 
         <section class="ui-card space-y-4">
             <h2 class="text-xl font-semibold">Créer un compte à la volée</h2>
-            <p class="text-sm text-slate-300">Choisissez un compte @{{ sourceDomain }}, éventuellement un nouvel identifiant si le collaborateur change de nom, puis créez la boîte chez OVH.</p>
+            <p class="text-sm text-slate-300">Choisissez un compte @{{ sourceDomain }}, éventuellement un nouvel identifiant si le collaborateur change de nom, puis définissez le mot de passe à lui transmettre (coffre-fort). Si vous le laissez vide, un mot de passe est généré et affiché après création.</p>
 
             <form method="post" action="{{ path('app_admin_domain_migration_create') }}" class="grid gap-3 lg:grid-cols-12 lg:items-end">
                 <input type="hidden" name="_token" value="{{ csrf_token('admin_create_17b_account') }}">
@@ -161,6 +161,22 @@
                         Réinitialiser le mot de passe
                     </label>
                     <button type="submit" class="ui-button-primary">Créer le compte</button>
+                </div>
+
+                <label class="block text-sm lg:col-span-4">
+                    <span class="mb-1 block text-slate-200">Mot de passe (coffre-fort)</span>
+                    <input id="create-password" type="password" name="password" minlength="9" maxlength="30" autocomplete="new-password" placeholder="Coller ou générer" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-slate-100">
+                </label>
+
+                <label class="block text-sm lg:col-span-4">
+                    <span class="mb-1 block text-slate-200">Confirmation</span>
+                    <input id="create-password-confirmation" type="password" name="passwordConfirmation" minlength="9" maxlength="30" autocomplete="new-password" class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-slate-100">
+                </label>
+
+                <div class="flex flex-wrap items-end gap-2 lg:col-span-4">
+                    <button id="generate-password" type="button" class="ui-button-secondary">Générer</button>
+                    <button id="copy-generated-password" type="button" class="ui-button-secondary">Copier</button>
+                    <p class="w-full text-xs text-slate-400">9 à 30 caractères, majuscule, minuscule, chiffre et caractère spécial. Pas d’accents.</p>
                 </div>
             </form>
         </section>
@@ -323,6 +339,57 @@
                     }
                 });
             });
+
+            const passwordInput = document.getElementById('create-password');
+            const passwordConfirmationInput = document.getElementById('create-password-confirmation');
+            const generatePasswordButton = document.getElementById('generate-password');
+            const copyGeneratedPasswordButton = document.getElementById('copy-generated-password');
+            const pickChar = (pool) => pool[Math.floor(Math.random() * pool.length)];
+            const generateMailboxPassword = () => {
+                const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+                const lower = 'abcdefghijkmnopqrstuvwxyz';
+                const digits = '23456789';
+                const special = '!#$%&()*+,-./:;<=>?@[]^_{|}~';
+                const chars = [pickChar(upper), pickChar(lower), pickChar(digits), pickChar(special)];
+                const pool = upper + lower + digits + special;
+                while (chars.length < 16) {
+                    chars.push(pickChar(pool));
+                }
+                for (let i = chars.length - 1; i > 0; i -= 1) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [chars[i], chars[j]] = [chars[j], chars[i]];
+                }
+
+                return chars.join('');
+            };
+
+            if (generatePasswordButton && passwordInput && passwordConfirmationInput) {
+                generatePasswordButton.addEventListener('click', () => {
+                    const password = generateMailboxPassword();
+                    passwordInput.type = 'text';
+                    passwordConfirmationInput.type = 'text';
+                    passwordInput.value = password;
+                    passwordConfirmationInput.value = password;
+                });
+            }
+
+            if (copyGeneratedPasswordButton && passwordInput) {
+                copyGeneratedPasswordButton.addEventListener('click', async () => {
+                    if (!passwordInput.value) {
+                        return;
+                    }
+                    try {
+                        await navigator.clipboard.writeText(passwordInput.value);
+                        copyGeneratedPasswordButton.textContent = 'Copié';
+                        setTimeout(() => {
+                            copyGeneratedPasswordButton.textContent = 'Copier';
+                        }, 1500);
+                    } catch {
+                        passwordInput.select();
+                        document.execCommand('copy');
+                    }
+                });
+            }
         });
     </script>
 {% endblock %}

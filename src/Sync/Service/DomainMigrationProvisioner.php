@@ -206,6 +206,7 @@ final class DomainMigrationProvisioner
         ?string $description,
         bool $force,
         ?string $passwordsFile = null,
+        ?string $plainPassword = null,
     ): array {
         $this->ownersByEmail = [];
         $sourceDomain = mb_strtolower(trim($sourceDomain));
@@ -258,7 +259,8 @@ final class DomainMigrationProvisioner
                 $targetDomain,
                 $targetEmail,
                 false,
-                $force
+                $force,
+                $plainPassword
             );
         } catch (\Throwable $exception) {
             $this->persistError($sourceEmail, $targetEmail, $targetDomain, $description, $exception->getMessage(), false);
@@ -557,6 +559,7 @@ final class DomainMigrationProvisioner
         string $targetEmail,
         bool $dryRun,
         bool $force,
+        ?string $plainPassword = null,
     ): array {
         [$sourceLocalPart] = explode('@', $row['sourceEmail'], 2);
         $sourceAccount = $this->ovhMailboxManager->find($sourceDomain, $sourceLocalPart);
@@ -565,7 +568,7 @@ final class DomainMigrationProvisioner
         }
 
         $alreadyExists = $this->ovhMailboxManager->exists($targetDomain, $row['targetLocalPart']);
-        $password = $this->passwordGenerator->generate($row['targetLocalPart']);
+        $password = $this->resolveProvisionPassword($plainPassword, $row['targetLocalPart']);
 
         if ($dryRun) {
             $status = $alreadyExists ? ($force ? 'updated' : 'skipped') : 'created';
@@ -720,6 +723,18 @@ final class DomainMigrationProvisioner
         ]);
 
         return $emailAccount?->getId();
+    }
+
+    private function resolveProvisionPassword(?string $plainPassword, string $targetLocalPart): string
+    {
+        $plainPassword = null === $plainPassword ? '' : trim($plainPassword);
+        if ('' === $plainPassword) {
+            return $this->passwordGenerator->generate($targetLocalPart);
+        }
+
+        $this->passwordGenerator->assertValid($plainPassword);
+
+        return $plainPassword;
     }
 
     private function resolveOwner(string $sourceEmail): User

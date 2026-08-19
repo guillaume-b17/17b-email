@@ -70,6 +70,14 @@ final class AdminDomainMigrationController extends AbstractController
         $targetLocalPart = mb_strtolower(trim((string) $request->request->get('targetLocalPart', '')));
         $description = trim((string) $request->request->get('description', ''));
         $force = '1' === (string) $request->request->get('force', '0');
+        $password = (string) $request->request->get('password', '');
+        $passwordConfirmation = (string) $request->request->get('passwordConfirmation', '');
+
+        if (('' !== $password || '' !== $passwordConfirmation) && $password !== $passwordConfirmation) {
+            $this->addFlash('error', 'Les deux mots de passe ne correspondent pas.');
+
+            return $this->redirectToRoute('app_admin_domain_migration');
+        }
 
         try {
             $detail = $this->domainMigrationProvisioner->provisionAccount(
@@ -79,7 +87,8 @@ final class AdminDomainMigrationController extends AbstractController
                 $this->targetDomain,
                 '' === $description ? null : $description,
                 $force,
-                $this->projectDir.'/var/share/17b-passwords.csv'
+                $this->projectDir.'/var/share/17b-passwords.csv',
+                '' === $password ? null : $password
             );
         } catch (\InvalidArgumentException $exception) {
             $this->addFlash('error', $exception->getMessage());
@@ -108,7 +117,7 @@ final class AdminDomainMigrationController extends AbstractController
             $this->addFlash(
                 'success',
                 sprintf(
-                    'Compte %s prêt. Mot de passe: %s — la personne peut aussi le retrouver après connexion sur Compte 17b.fr.',
+                    'Compte %s prêt. Mot de passe à transmettre et à ranger dans le coffre-fort: %s',
                     $detail['targetEmail'],
                     $password
                 )
