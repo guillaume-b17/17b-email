@@ -22,10 +22,12 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 final class MailboxSetupController extends AbstractController
 {
     private const CLIENTS = [
-        'outlook' => 'Outlook',
+        'outlook-mac' => 'Outlook sur Mac',
+        'thunderbird-mac' => 'Thunderbird sur Mac',
         'apple-mac' => 'Mail sur Mac',
         'iphone' => 'iPhone ou iPad',
-        'thunderbird' => 'Thunderbird',
+        'outlook' => 'Outlook sur Windows',
+        'thunderbird' => 'Thunderbird sur Windows',
         'gmail' => 'Gmail',
         'autre' => 'Autre logiciel',
     ];

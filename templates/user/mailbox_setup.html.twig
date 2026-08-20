@@ -152,59 +152,86 @@
                 </div>
 
             {% elseif step == 'ajout' %}
-                <div class="mx-auto max-w-lg text-center">
+                <div class="mx-auto max-w-2xl text-center">
                     <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Ajoute un nouveau compte</h1>
-                    <p class="mt-3 text-sm text-slate-300">Dans {{ clientLabel }}, crée un compte <strong>en plus</strong> de {{ sourceEmail }}. Ne remplace pas l’ancien, ne choisis pas Exchange ni POP.</p>
+                    <p class="mt-3 text-sm text-slate-300">Dans {{ clientLabel }}, crée un compte <strong>en plus</strong> de {{ sourceEmail }}. Ne remplace pas l’ancien. Type de compte : <strong>IMAP</strong> (pas Exchange, pas Microsoft 365, pas POP).</p>
                 </div>
-                <section class="ui-card mx-auto mt-8 max-w-lg space-y-4">
-                    <ol class="list-decimal space-y-3 pl-5 text-sm text-slate-300">
-                        {% if client == 'outlook' %}
-                            <li>Ouvre Outlook → Fichier → Ajouter un compte (ou Paramètres → Comptes → Ajouter un compte).</li>
-                            <li>Saisis <span class="font-mono text-slate-100">{{ targetEmail }}</span>, puis choisis la configuration manuelle.</li>
-                            <li>Type de compte : <strong>IMAP</strong> (pas Microsoft 365, pas Exchange, pas POP).</li>
-                            <li>Colle le mot de passe copié à l’étape précédente.</li>
-                            <li>Si Outlook propose de « migrer » ou remplacer un compte, refuse : tu dois avoir deux boîtes.</li>
+                <section class="ui-card mx-auto mt-8 max-w-2xl space-y-5">
+                    <ol class="list-decimal space-y-3 pl-5 text-sm leading-relaxed text-slate-300">
+                        {% if client == 'outlook-mac' %}
+                            <li>Ouvre <strong>Outlook</strong> (l’application Microsoft, pas Mail d’Apple).</li>
+                            <li>Dans la barre de menus en haut de l’écran : <strong>Outlook → Réglages</strong> (ou Préférences).</li>
+                            <li>Clique sur <strong>Comptes</strong>, puis sur le bouton <strong>+</strong> en bas à gauche → <strong>Ajouter un compte</strong> (ou Nouveau compte).</li>
+                            <li>Saisis <span class="font-mono text-slate-100">{{ targetEmail }}</span> puis <strong>Continuer</strong>.</li>
+                            <li>Outlook va souvent proposer Microsoft 365 / Exchange. Refuse : cherche <strong>« Pas Microsoft ? »</strong>, <strong>« IMAP »</strong>, <strong>« Autre fournisseur »</strong> ou <strong>Options avancées → Configurer manuellement</strong>.</li>
+                            <li>Choisis <strong>IMAP</strong>. Identifiant : l’adresse complète {{ targetEmail }}. Mot de passe : celui copié à l’étape précédente (pas le mot de passe de ton compte Microsoft).</li>
+                            <li>Serveur de réception : <span class="font-mono text-slate-100">{{ mailClientSettings.imapHost }}</span>, port <span class="font-mono text-slate-100">{{ mailClientSettings.imapPort }}</span>, sécurité {{ mailClientSettings.imapEncryption }}.</li>
+                            <li>Serveur d’envoi (SMTP) : <span class="font-mono text-slate-100">{{ mailClientSettings.smtpHost }}</span>, port <span class="font-mono text-slate-100">{{ mailClientSettings.smtpPort }}</span>, sécurité {{ mailClientSettings.smtpEncryption }}. Coche l’authentification SMTP, mêmes identifiant et mot de passe.</li>
+                            <li>Valide. Dans la liste des comptes, tu dois voir {{ sourceEmail }} <strong>et</strong> {{ targetEmail }}. Si Outlook propose de migrer ou de remplacer l’ancien compte, annule.</li>
+                        {% elseif client == 'thunderbird-mac' %}
+                            <li>Ouvre <strong>Thunderbird</strong>.</li>
+                            <li>Dans la barre de menus en haut de l’écran : <strong>Fichier → Nouveau → Compte de messagerie existant…</strong><br>Autre chemin : <strong>Thunderbird → Réglages</strong> (ou Outils → Paramètres des comptes) → en bas à gauche <strong>Actions pour le compte → Ajouter un compte de messagerie…</strong>.</li>
+                            <li>Nom affiché : le tien. Adresse : <span class="font-mono text-slate-100">{{ targetEmail }}</span>. Mot de passe : celui copié à l’étape précédente. Coche « Mémoriser le mot de passe », puis <strong>Continuer</strong>.</li>
+                            <li>Thunderbird va chercher tout seul et se trompera souvent sur @17b.fr. Clique tout de suite sur <strong>Configurer manuellement</strong> (ou Configuration manuelle).</li>
+                            <li>Protocole entrant : <strong>IMAP</strong> (pas POP3).</li>
+                            <li>Serveur entrant : <span class="font-mono text-slate-100">{{ mailClientSettings.imapHost }}</span> · port <span class="font-mono text-slate-100">{{ mailClientSettings.imapPort }}</span> · sécurité <strong>SSL/TLS</strong> · authentification <strong>Mot de passe normal</strong>. Nom d’utilisateur : l’adresse complète.</li>
+                            <li>Serveur sortant (SMTP) : <span class="font-mono text-slate-100">{{ mailClientSettings.smtpHost }}</span> · port <span class="font-mono text-slate-100">{{ mailClientSettings.smtpPort }}</span> · sécurité <strong>SSL/TLS</strong> · authentification <strong>Mot de passe normal</strong>. Nom d’utilisateur : la même adresse.</li>
+                            <li>Clique sur <strong>Retester</strong> (ou Réessayer). Quand c’est vert / valide, clique sur <strong>Terminé</strong>.</li>
+                            <li>Dans le panneau de gauche, tu dois voir le dossier de {{ sourceEmail }} et celui de {{ targetEmail }}. Ne supprime pas l’ancien compte.</li>
+                        {% elseif client == 'outlook' %}
+                            <li>Ouvre Outlook. Selon la version : <strong>Fichier → Ajouter un compte</strong>, ou icône d’engrenage → <strong>Comptes → Ajouter un compte</strong>.</li>
+                            <li>Saisis <span class="font-mono text-slate-100">{{ targetEmail }}</span>.</li>
+                            <li>Choisis <strong>Configuration manuelle</strong> / <strong>Autoriser la configuration manuelle de mon compte</strong>.</li>
+                            <li>Type : <strong>IMAP</strong> (pas Microsoft 365, pas Exchange, pas POP).</li>
+                            <li>Identifiant : l’adresse complète. Mot de passe : celui de l’étape précédente.</li>
+                            <li>Réception : {{ mailClientSettings.imapHost }} / {{ mailClientSettings.imapPort }} / SSL. Envoi : {{ mailClientSettings.smtpHost }} / {{ mailClientSettings.smtpPort }} / SSL, authentification SMTP activée.</li>
+                            <li>Si Outlook propose de migrer ou remplacer un compte, refuse : tu dois avoir deux boîtes.</li>
                         {% elseif client == 'apple-mac' %}
-                            <li>Ouvre Mail → Réglages → Comptes → Ajouter un compte.</li>
-                            <li>Choisis « Autre compte Mail… », pas iCloud ni Exchange.</li>
-                            <li>Nom : celui que tu veux afficher. Adresse : <span class="font-mono text-slate-100">{{ targetEmail }}</span>.</li>
-                            <li>Colle le mot de passe, puis valide. Mail demande ensuite IMAP/SMTP à l’étape suivante.</li>
-                            <li>Laisse {{ sourceEmail }} coché dans la barre latérale.</li>
+                            <li>Ouvre <strong>Mail</strong> → barre de menus <strong>Mail → Réglages</strong> (ou Préférences) → onglet <strong>Comptes</strong>.</li>
+                            <li>Clique sur <strong>+</strong> → <strong>Ajouter un compte</strong> → <strong>Autre compte Mail…</strong> (pas iCloud, pas Exchange, pas Google).</li>
+                            <li>Nom : celui que tu veux afficher. Adresse e-mail : <span class="font-mono text-slate-100">{{ targetEmail }}</span>. Mot de passe : celui copié juste avant.</li>
+                            <li>Si Mail demande les serveurs : IMAP {{ mailClientSettings.imapHost }} ({{ mailClientSettings.imapPort }}) et SMTP {{ mailClientSettings.smtpHost }} ({{ mailClientSettings.smtpPort }}), nom d’utilisateur = l’adresse complète.</li>
+                            <li>Dans la barre latérale de Mail, laisse {{ sourceEmail }} coché. Tu dois voir les deux comptes.</li>
                         {% elseif client == 'iphone' %}
-                            <li>Réglages → Apps → Mail → Comptes → Ajouter un compte (selon iOS : Mail → Comptes).</li>
-                            <li>Choisis « Autre » → Ajouter un compte Mail. Pas Google, pas Microsoft, pas Exchange.</li>
-                            <li>Nom, adresse <span class="font-mono text-slate-100">{{ targetEmail }}</span>, mot de passe, une description du type « 17b ».</li>
-                            <li>Quand iOS demande le serveur, passe à l’étape suivante de ce tutoriel.</li>
+                            <li>Ouvre <strong>Réglages</strong> → <strong>Apps</strong> → <strong>Mail</strong> → <strong>Comptes</strong> (selon iOS : Réglages → Mail → Comptes).</li>
+                            <li><strong>Ajouter un compte</strong> → <strong>Autre</strong> → <strong>Ajouter un compte Mail</strong>. Pas Google, pas Microsoft, pas Exchange.</li>
+                            <li>Nom, adresse <span class="font-mono text-slate-100">{{ targetEmail }}</span>, mot de passe, description du type « 17b ».</li>
+                            <li>Serveur de réception : {{ mailClientSettings.imapHost }}. Serveur d’envoi : {{ mailClientSettings.smtpHost }}. Identifiant : l’adresse complète, des deux côtés.</li>
                             <li>Ne supprime pas le compte {{ sourceEmail }} déjà présent.</li>
                         {% elseif client == 'thunderbird' %}
-                            <li>Thunderbird → ☰ → Paramètres des comptes → Actions pour le compte → Ajouter un compte de messagerie.</li>
-                            <li>Adresse : <span class="font-mono text-slate-100">{{ targetEmail }}</span>, puis « Configurer manuellement ».</li>
-                            <li>Protocole : IMAP. Identifiant : l’adresse complète.</li>
-                            <li>Colle le mot de passe. Termine, sans retirer l’ancien compte {{ sourceEmail }}.</li>
+                            <li>Thunderbird → menu ☰ → <strong>Paramètres des comptes</strong>.</li>
+                            <li>En bas à gauche : <strong>Actions pour le compte → Ajouter un compte de messagerie…</strong>.</li>
+                            <li>Adresse : <span class="font-mono text-slate-100">{{ targetEmail }}</span>, mot de passe de l’étape précédente, puis <strong>Configurer manuellement</strong>.</li>
+                            <li>IMAP · {{ mailClientSettings.imapHost }} · {{ mailClientSettings.imapPort }} · SSL/TLS. SMTP · {{ mailClientSettings.smtpHost }} · {{ mailClientSettings.smtpPort }} · SSL/TLS. Identifiant = l’adresse complète.</li>
+                            <li>Retester, puis Terminé, sans retirer {{ sourceEmail }}.</li>
                         {% elseif client == 'gmail' %}
-                            <li>Sur téléphone : Gmail → ta photo → Ajouter un autre compte → Autre.</li>
+                            <li>Sur téléphone : Gmail → ta photo → <strong>Ajouter un autre compte</strong> → <strong>Autre</strong>.</li>
                             <li>Choisis IMAP. Adresse : <span class="font-mono text-slate-100">{{ targetEmail }}</span>. Identifiant = l’adresse complète.</li>
-                            <li>Colle le mot de passe, puis les serveurs de l’étape suivante.</li>
-                            <li>Sur ordinateur, l’app Gmail ou un vrai client (Outlook, Mail, Thunderbird) est plus simple que Gmail web.</li>
+                            <li>Colle le mot de passe, puis les serveurs : IMAP {{ mailClientSettings.imapHost }} ({{ mailClientSettings.imapPort }}), SMTP {{ mailClientSettings.smtpHost }} ({{ mailClientSettings.smtpPort }}).</li>
+                            <li>Sur ordinateur, Outlook, Mail ou Thunderbird est plus simple que Gmail web.</li>
                         {% else %}
                             <li>Ouvre les paramètres du logiciel → Ajouter un compte (pas « remplacer », pas « migrer »).</li>
                             <li>Type : <strong>IMAP</strong> uniquement.</li>
                             <li>Nom d’utilisateur : l’adresse complète <span class="font-mono text-slate-100">{{ targetEmail }}</span>.</li>
                             <li>Mot de passe : celui de l’étape identifiants.</li>
-                            <li>Les serveurs IMAP/SMTP sont à l’étape suivante.</li>
+                            <li>Les serveurs IMAP/SMTP sont rappelés à l’étape suivante.</li>
                         {% endif %}
                     </ol>
                 </section>
-                <div class="mx-auto mt-8 flex max-w-lg justify-end">
+                <div class="mx-auto mt-8 flex max-w-2xl justify-end">
                     <a class="ui-button-primary px-6 py-3 text-base" href="{{ path('app_user_mailbox_setup', wizardParams|merge({ step: nextStep })) }}">Continuer</a>
                 </div>
 
             {% elseif step == 'parametres' %}
                 <div class="mx-auto max-w-lg text-center">
                     <h1 class="text-balance text-4xl font-semibold leading-tight sm:text-5xl">Paramètres serveur</h1>
-                    <p class="mt-3 text-sm text-slate-300">Recopie ces valeurs si le logiciel les demande. Nom d’utilisateur : l’adresse complète.</p>
+                    <p class="mt-3 text-sm text-slate-300">Recopie ces valeurs si le logiciel les demande encore. Nom d’utilisateur : l’adresse complète, pas seulement la partie avant le @.</p>
                 </div>
                 <section class="ui-card mx-auto mt-8 max-w-lg space-y-4">
+                    <div>
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Nom d’utilisateur</p>
+                        <p class="mt-1 font-mono text-sm text-slate-100">{{ targetEmail }}</p>
+                    </div>
                     <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
                         <p class="text-xs uppercase tracking-wide text-slate-400">Réception IMAP</p>
                         <dl class="mt-2 space-y-2 text-sm">
