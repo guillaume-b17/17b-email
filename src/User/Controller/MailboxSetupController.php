@@ -10,7 +10,6 @@ use App\Entity\User;
 use App\Sync\Service\AppleMailProfileGenerator;
 use App\Sync\Service\DomainMigrationProvisioner;
 use App\Sync\Service\MailClientSettings;
-use App\Sync\Service\MailboxPasswordGenerator;
 use App\User\Service\ManagedMailboxResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -35,7 +34,6 @@ final class MailboxSetupController extends AbstractController
         private readonly DomainMigrationProvisioner $domainMigrationProvisioner,
         private readonly AppleMailProfileGenerator $appleMailProfileGenerator,
         private readonly MailClientSettings $mailClientSettings,
-        private readonly MailboxPasswordGenerator $mailboxPasswordGenerator,
         private readonly ManagedMailboxResolver $managedMailboxResolver,
     ) {
     }
@@ -91,55 +89,7 @@ final class MailboxSetupController extends AbstractController
             'targetEmail' => $targetEmail,
             'sourceEmail' => $migration?->getSourceEmail() ?? $user->getEmail(),
             'canSetup' => $canSetup,
-            'canChangePassword' => $setupAccount instanceof EmailAccount,
         ]);
-    }
-
-    #[Route('/mot-de-passe', name: 'app_user_mailbox_setup_password', methods: ['POST'])]
-    public function changePassword(Request $request): Response
-    {
-        $user = $this->requireUser();
-        if (!$this->isCsrfTokenValid('mailbox_setup_password', (string) $request->request->get('_token'))) {
-            $this->addFlash('error', 'Session expirée, veuillez réessayer.');
-
-            return $this->redirectToRoute('app_user_mailbox_setup');
-        }
-
-        $currentAccount = $this->managedMailboxResolver->resolve($user, $request->request->get('accountId'));
-        $setupAccount = $this->managedMailboxResolver->findOwnedTargetAccount(
-            $currentAccount instanceof EmailAccount ? $currentAccount->getOwner() : $user,
-            $currentAccount
-        );
-        $wizardParams = $this->wizardRouteParams(
-            $setupAccount ?? $currentAccount,
-            (string) $request->request->get('step', 'identifiants'),
-            (string) $request->request->get('client', '')
-        );
-        if (!$setupAccount instanceof EmailAccount) {
-            $this->addFlash('error', 'Aucun compte 17b.fr n’est associé à cet utilisateur.');
-
-            return $this->redirectToRoute('app_user_mailbox_setup', $wizardParams);
-        }
-
-        $password = (string) $request->request->get('password', '');
-        $confirmation = (string) $request->request->get('passwordConfirmation', '');
-        if ($password !== $confirmation) {
-            $this->addFlash('error', 'Les deux mots de passe ne correspondent pas.');
-
-            return $this->redirectToRoute('app_user_mailbox_setup', $wizardParams);
-        }
-
-        try {
-            $this->mailboxPasswordGenerator->assertValid($password);
-            $this->domainMigrationProvisioner->changeMailboxPassword($setupAccount, $password);
-            $this->addFlash('success', 'Mot de passe du compte 17b.fr mis à jour. Utilise-le dans ton logiciel de messagerie.');
-        } catch (\InvalidArgumentException $exception) {
-            $this->addFlash('error', $exception->getMessage());
-        } catch (\Throwable $exception) {
-            $this->addFlash('error', sprintf('Impossible de changer le mot de passe OVH: %s', $exception->getMessage()));
-        }
-
-        return $this->redirectToRoute('app_user_mailbox_setup', $wizardParams);
     }
 
     #[Route('/apple-mail', name: 'app_user_mailbox_setup_apple', methods: ['GET'])]
@@ -171,7 +121,7 @@ final class MailboxSetupController extends AbstractController
         }
 
         if (null === $password || '' === $password) {
-            $this->addFlash('error', 'Définis d’abord un mot de passe pour télécharger le profil Apple Mail.');
+            $this->addFlash('error', 'Aucun mot de passe n’est enregistré. Contacte un administrateur.');
 
             return $this->redirectToRoute(
                 'app_user_mailbox_setup',
